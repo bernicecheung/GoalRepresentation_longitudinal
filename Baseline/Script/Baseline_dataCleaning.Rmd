@@ -736,17 +736,48 @@ which(GAT_NA > 1/3 * ncol(GAT_items))
 GAT_R <-  GAT_items %>%
   mutate(
          GAT2_R = 6 - GAT2,
-         GAT4_R = 6 - GAT4) %>%
-  dplyr :: select(-GAT2, -GAT4)
+         GAT3_R = 6 - GAT3) %>%
+  dplyr :: select(-GAT2, -GAT3)
 
 # calculate the means
 GAT_scores <- GAT_R %>%
-  mutate(GAT_disengagement = rowMeans(dplyr :: select(., BISBAS3_R, BISBAS9_R,BISBAS12_R, BISBAS21_R), na.rm = TRUE),
-         BAS_funSeeking = rowMeans(dplyr :: select(., BISBAS5_R, BISBAS10_R,BISBAS15_R, BISBAS20_R), na.rm = TRUE),
-         BAS_rewardResponse = rowMeans(dplyr :: select(., BISBAS4_R, BISBAS7_R,BISBAS14_R, BISBAS18_R, BISBAS23_R), na.rm = TRUE),
-         BIS = rowMeans(dplyr :: select(., BISBAS2, BISBAS8_R,BISBAS13_R, BISBAS16_R, BISBAS19_R, BISBAS22, BISBAS24_R), na.rm = TRUE)) %>%
-  dplyr :: select(BAS_drive, BAS_funSeeking, BAS_rewardResponse, BIS)
+  mutate(GAT_disengagement = rowMeans(dplyr :: select(., GAT1, GAT2_R,GAT3_R, GAT4), na.rm = TRUE),
+         GAT_reengagement = rowMeans(dplyr :: select(., GAT5, GAT6,GAT7, GAT8, GAT9, GAT10), na.rm = TRUE)) %>%
+  dplyr :: select(GAT_disengagement, GAT_reengagement)
 
 # check reliability
-alpha(GS_R)$total$std.alpha
+alpha(dplyr::select(GAT_R, GAT1, GAT2_R,GAT3_R, GAT4))$total$std.alpha
+alpha(dplyr::select(GAT_R, GAT5, GAT6,GAT7, GAT8, GAT9, GAT10))$total$std.alpha
+```
+
+### combine all individual difference measure
+```{r}
+# Combine individual measures
+indivDiffDf <- bind_cols(BFI_scores, BSCS_mean, GSE_mean, GS_mean, LET_mean, PS_mean, RSE_mean, SWL_mean, PSS_mean, K10_mean, BISBAS_scores, GAT_scores)
+indivDiffDf$MTurkCode <- cleanedDf$MTurkCode
+
+# Combine demographic information 
+demoDf <- cleanedDf %>%
+  select(MTurkCode,age, gender : subjectiveSES)
+
+#indivDiffDf <- indivDiffDf %>% left_join(demoDf, by = "MTurkCode")
+```
+
+# write cleaned datasets
+
+```{r}
+# cleaned long format dataset for goal ratings
+write.csv(goalRating_long_R, here("Baseline", "Inputs", "goalRating_long_R.csv"), row.names = F)
+
+# cleaned individual difference dataset
+write.csv(indivDiffDf,here("Baseline", "Inputs", "indivDiffDf.csv"), row.names = F)
+
+# cleaned demographic dataset
+write.csv(demoDf,here("Baseline", "Inputs", "demoDf.csv"), row.names = F)
+
+# cleaned wide format dataset for goal rating summary
+#goalDf_wide <- left_join(cleanedDf,goal_screen, by = "MTurkCode") %>%
+  #select(MTurkCode,listNum,total_goal, Screen)
+
+write.csv(cleanedDf, here("Baseline", "Inputs", "goalDf_wide.csv"), row.names = F)
 ```
