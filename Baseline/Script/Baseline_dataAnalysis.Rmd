@@ -34,9 +34,11 @@ load data: 246 subjects, with 845 goals are included in the following analysis
 ```{r}
 goalRating_long_R <- read.csv(here("Baseline", "Inputs", "goalRating_long_R.csv"),stringsAsFactors = F)
 
-goalDf_wide <- read.csv(here("Baseline", "Inputs", "goalDf_wide.csv"),stringsAsFactors = F)
+wideDf <- read.csv(here("Baseline", "Inputs", "wideDf.csv"),stringsAsFactors = F)
 
 indivDiffDf <- read.csv(here("Baseline", "Inputs", "indivDiffDf.csv"),stringsAsFactors = F)
+
+goalListDf <- read.csv(here("Baseline", "Outputs", "listedGoals.csv"), stringsAsFactors = F)
 ```
 
 # Data Screening for goal representation assessment
@@ -99,13 +101,13 @@ goalRating_long_R <- goalRating_long_R %>%
 
 Descriptive on the number of goals subject claimed to have prior to listing them (lower than the previous mTurk study)
 ```{r}
-describe(goalDf_wide$total_goal)
+describe(wideDf$total_goal)
 ```
 
 Visualize the number of claimed goals per subject after excluding the extreme value (> 20) (1 claimed 40)
 ```{r}
 breaks = (1:20)
-goalDf_wide %>% 
+wideDf %>% 
   filter(total_goal < 20) %>%
   ggplot(aes(x = total_goal)) + 
   scale_x_continuous(labels=scales::comma(breaks, accuracy = 1), breaks=breaks) + 
@@ -122,17 +124,17 @@ The percentage of subjects who claimed having more than 5 goals: 9.8%
 # get the number of total subject
 totalSub <- nrow(indivDiffDf)
 
-length(goalDf_wide$total_goal[goalDf_wide$total_goal>5])/totalSub
+length(wideDf$total_goal[wideDf$total_goal>5])/totalSub
 ```
 
 Descriptive on the number of goals participants actual listed (similar to all previous study)
 ```{r}
-describe(goalDf_wide$listNum)
+describe(wideDf$listNum)
 ```
 
 ```{r}
 breaks <- (1:5)
-goalDf_wide %>% 
+wideDf %>% 
   ggplot(aes(x = listNum)) + 
   scale_x_continuous(labels=scales::comma(breaks, accuracy = 1), breaks=seq(1, 5, by = 1)) + 
   geom_histogram(fill = "orange", 
@@ -144,16 +146,16 @@ goalDf_wide %>%
 
 number of people who listed 1 goal: 9
 ```{r}
-length(goalDf_wide$listNum[goalDf_wide$listNum == 1])
+length(wideDf$listNum[wideDf$listNum == 1])
 ```
 
 
 descriptive on the differences between the number of claimed goals and listed goals (after exclude the extreme case)
 ```{r}
-goalDf_wide <-goalDf_wide %>%
+wideDf <-wideDf %>%
   mutate(diffNum = total_goal - listNum)
 
-goalDf_sum_wide_clean <- goalDf_wide %>%filter(total_goal < 20)
+goalDf_sum_wide_clean <- wideDf %>%filter(total_goal < 20)
   
 describe(goalDf_sum_wide_clean$diffNum)
 
@@ -171,13 +173,13 @@ goalDf_sum_wide_clean %>%
 
 percentage of people who listed more goals than they claimed: 13%
 ```{r}
-length(goalDf_wide$diffNum[goalDf_wide$diffNum <0])/totalSub *100
+length(wideDf$diffNum[wideDf$diffNum <0])/totalSub *100
 ```
 
 
 percentage of people who listed less goals more than they claimed: 14%
 ```{r}
-length(goalDf_wide$diffNum[goalDf_wide$diffNum >0])/totalSub *100
+length(wideDf$diffNum[wideDf$diffNum >0])/totalSub *100
 ```
 
 
@@ -201,4 +203,219 @@ goalRating_long_R %>%
   kable(format = "html", escape = F) %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
 ```
+
+
+The trend looks more skewed than previous MTurk data
+```{r fig.width = 10, fig.height=10, warning=FALSE}
+# histograms for each dimension
+goalRating_long_R %>%
+  ggplot(aes(x = rating)) +
+    geom_histogram(fill   = "orange",
+                   colour = "black",
+                   alpha  = .6) +
+    facet_wrap(~variable, nrow = 7)
+```
+
+### correlational matrix across all variables
+
+"pairwise.complete.obs" is used for generating correlation matrix.The correlations make sense
+```{r fig.height=20, fig.width=20}
+# transform the long format to short format
+goalDf_wide <- goalRating_long_R %>% spread (variable, rating)
+
+# generate a correctional matrix
+corrM_all <- goalDf_wide %>% 
+  dplyr :: select(affordance:visibility) %>% 
+  cor(use = "pairwise.complete.obs")
+
+# visualization
+corrplot(corrM_all, method = "circle",number.cex = .7, order = "AOE", addCoef.col = "black",type = "upper",col= colorRampPalette(c("midnightblue","white", "orange"))(200))
+
+# write the wide format
+write.csv(goalDf_wide, here("Baseline", "Outputs", "goalDf_wide.csv"), row.names = F)
+
+left_join(goalListDf, goalDf_wide, by = c("MTurkCode","goal_order" = "goal")) %>%
+  write.csv(., here("Baseline", "Outputs", "goalList_rating.csv"),row.names = F)
+```
+
+### Variance Partition
+
+Only the 31 variables for goal representation are included. Only around 6.6% of the variance is on the between subject level. 
+
+```{r}
+# subset the long format dataset for only the 31 goal representation variable
+goal_striving <- c("commitment", "urgency", "effort", "initial_time_R", "regret", "procrastination", "failure", "self_resources", "other_resources", "implementation_intention")
+goalDf_R_long <- goalRating_long_R[!goalRating_long_R$variable %in% goal_striving,]
+
+# generate a multilevel model with subject as the random intercept
+mlm <-lmer(rating ~ variable + (1|MTurkCode), data = goalDf_R_long)
+
+# calculate the variance partition coefficient and transform to ICC
+VarCorr(mlm) %>%
+  as_tibble() %>%
+  mutate(icc=vcov/sum(vcov)) %>%
+  dplyr :: select(grp, icc)
+
+Raw <- VarCorr(mlm) %>%
+  as_tibble() %>%
+  mutate(Raw=vcov/sum(vcov)) %>%
+  dplyr :: select(Raw)
+```
+
+
+# Exploritory Factor Analysis
+
+### Data transformation 
+
+26 variables are included. Ordinal variables are not included: "temporal_duration" & "end_state_specificity" and "frequency"; appoach_avoidance_R & attainment_maintainance_R are also dropped because these 2 variables are more relevant to the phrasing/content of a goal than the perception of a goal. This step is consistent with the SONA study
+
+```{r}
+# Exclude the 8 variables related to goal striving progress
+goalDf_R_wide <- goalDf_wide[,!names(goalDf_wide) %in% goal_striving]
+
+# Exclude 5 goal representation variables and other columns with irrelevant data
+goal_exclude <- c("temporal_duration", "end_state_specificity_R", "frequency_R", "attainment_maintenance_R", "approach_avoidance_R")
+goalDf_EFA <- goalDf_R_wide[,!names(goalDf_R_wide) %in% goal_exclude]
+goalDf_EFA <- subset(goalDf_EFA, select = affordance : visibility)
+
+# Generate a correctional matrix 
+corrM_raw <- cor(goalDf_EFA, use = "pairwise")
+
+# export the correlation matrix
+write.csv(corrM_raw,here("Baseline", "Outputs", "baseline_corrRating_raw.csv"))
+write.csv(goalDf_EFA,here("Baseline", "Outputs", "baseline_EFA_raw.csv"), row.names = F)
+```
+
+### evaluate the number of factors
+```{r}
+# use Very Simple Structure criterion
+res_vss <- psych :: nfactors(corrM_raw, n = 10, rotate = "promax", diagonal = FALSE, fm = "minres", 
+n.obs=845,title="Very Simple Structure",use="pairwise",cor="cor")
+
+# select useful parameters and organize them into a table
+cbind(1:10, res_vss$map) %>%
+  as_tibble() %>%
+  rename(., factor = V1, map = V2) %>%
+  cbind(., res_vss$vss.stats) %>%
+  select(factor, map, fit, complex, eChisq, SRMR, eCRMS, eBIC, eRMS) %>%
+  kable(format = "html", escape = F, caption = "VSS output -mTurk") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+
+```
+
+```{r}
+# Use the Scree plot to identify the number of factors have Eigenvalues >1 and the output from the Parallel analysis
+
+ev <- eigen(corrM_raw)
+ap <- parallel(subject=nrow(goalDf_EFA),var=ncol(goalDf_EFA),
+  rep=100,cent=.05)
+nS <- nScree(x=ev$values, aparallel=ap$eigen$qevpea)
+plotnScree(nS)
+```
+
+
+## Extract factors
+
+```{r}
+# extract 4 factors
+fa_new_4 <-fa(r=corrM_raw, nfactors=4,n.obs = 845, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+## Factor loadings
+```{r}
+fa.diagram(fa_new_4)
+```
+
+```{r}
+# visualization
+loadings <- fa.sort(fa_new_4)$loadings
+loadings <- as.data.frame(unclass(loadings))
+colnames(loadings) <- c("Value","External", "Clarity", "Consensus")
+loadings$Items <- rownames(loadings)
+loadings.m <- loadings %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("Value","External", "Clarity", "Consensus")
+rowOrder <- rev(rownames(loadings))
+loadings.m<- arrange(mutate(loadings.m,Items=factor(Items,leve=rowOrder)),Items)
+loadings.m<- arrange(mutate(loadings.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(loadings.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Four Factor Solution from mTurk Sample 2") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+
+interfactor correlation: 
+
+The correlation between clarity and value seems weird
+```{r}
+fa_new_4$Phi %>% 
+  as.tibble() %>% 
+  dplyr::rename(External = MR1, Value = MR2, Clarity = MR3, Cansensus = MR4) %>%
+  round(.,2) %>%
+  remove_rownames() %>%
+  mutate(factor = colnames(.)) %>%
+  select(factor, everything()) %>%
+  kable(format = "html", escape = F, caption = "<center>Factor Correlation of mTurk Sample 2</center>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+```
+
+## Model fit
+```{r}
+data.frame(sample = "mTurk", factors = 4, items = 26, observation = 845, chi = fa_new_4$chi, BIC = fa_new_4$BIC, fit = fa_new_4$fit, RMSEA = fa_new_4$RMSEA[1], cumVar = max(fa_new_4$Vaccounted[3,]), complexity = mean(fa_new_4$complexity)) %>%
+  remove_rownames() %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+sona_factorFit <- data.frame(sample = "mTurk", factors = 4, items = 26, observation = 845, chi = fa_new_4$chi, BIC = fa_new_4$BIC, fit = fa_new_4$fit, RMSEA = fa_new_4$RMSEA[1], cumVar = max(fa_new_4$Vaccounted[3,]), complexity = mean(fa_new_4$complexity))
+
+#write.csv(sona_factorFit, "./outputs/mTurk2_factorFit.csv", row.names = F)
+```
+
+
+## 6 factor model
+
+
+```{r}
+# extract 6 factors
+fa_new_6 <-fa(r=corrM_raw, nfactors=6,n.obs = 845, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+## Factor loadings
+```{r}
+fa.diagram(fa_new_6)
+```
+```{r}
+# visualization
+loadings <- fa.sort(fa_new_6)$loadings
+loadings <- as.data.frame(unclass(loadings))
+colnames(loadings) <- c("Value","External", "Attainability", "Instrumentality", "Consensus", "Measurability")
+loadings$Items <- rownames(loadings)
+loadings.m <- loadings %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("Value","External", "Attainability", "Instrumentality", "Consensus", "Measurability")
+rowOrder <- rev(rownames(loadings))
+loadings.m<- arrange(mutate(loadings.m,Items=factor(Items,leve=rowOrder)),Items)
+loadings.m<- arrange(mutate(loadings.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(loadings.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Four Factor Solution from mTurk Sample 2") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+
 
