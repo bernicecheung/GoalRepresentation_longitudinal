@@ -783,5 +783,14 @@ write.csv(demoDf,here("Baseline", "Inputs", "demoDf.csv"), row.names = F)
 #goalDf_wide <- left_join(cleanedDf,goal_screen, by = "MTurkCode") %>%
   #select(MTurkCode,listNum,total_goal, Screen)
 
-write.csv(cleanedDf, here("Baseline", "Inputs", "goalDf_wide.csv"), row.names = F)
+write.csv(cleanedDf, here("Baseline", "Inputs", "wideDf.csv"), row.names = F)
+
+
+goal_list <- list_df %>%
+  filter(!MTurkCode %in% id_candidate) %>%
+  select(contains("goal_list"), MTurkCode) %>%
+  pivot_longer(contains("goal_list"), names_to = "goal_order", names_prefix = "goal_list_", values_to = "goals") %>%
+  filter(goals != "")
+
+write.csv(goal_list,here("Baseline", "Outputs", "listedGoals.csv"), row.names = F)
 ```
