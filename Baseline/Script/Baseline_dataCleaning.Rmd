@@ -1,0 +1,752 @@
+---
+title: "Baseline_dataCleaning"
+author: "Bernice Cheung"
+date: "03/29/2021"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+# Load and prep data
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, echo=FALSE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(psych)
+library(ggplot2)
+library(stringr)
+library(knitr)
+library(lme4)
+library(nFactors)
+library(corrplot)
+library(janitor)
+library(kableExtra)
+library(here)
+```
+
+Raw data was directly downloaded from Qualtric on 03/24/21. A filter that only includes participants who met the inclusion criteria, consented and completed the survey was applied prior to downloading it. 251 participants are included in this raw dataset. 
+
+```{r load data}
+# load raw data
+rawDf <- read.csv(here("Raw_data", "Goal Longitudinal_Baseline_March 25, 2021_00.00.csv"), stringsAsFactors = F)
+```
+
+Organize the raw dataframe
+```{r organize raw}
+# delete the first two rows of labels and questions 
+rawDf_cleaned <- rawDf[-c(1,2),]
+
+# write the data without the 2 rows
+write.csv(rawDf_cleaned, here("Baseline", "Inputs", "raw_clean.csv"), row.names = F)
+
+# reload the raw cleaned dataframe
+rawDf_cleaned <- read.csv(here("Baseline", "Inputs", "raw_clean.csv"),stringsAsFactors = F)
+```
+
+Transform and generate variables
+```{r}
+# convert the secret code to MTurkcode
+rawDf_cleaned <- rawDf_cleaned %>%
+  #rowwise() %>%
+  mutate(MTurkCode = as.numeric(str_sub(Secrete.Code, start = 13L, end = -1L)))
+
+# convert the duration in seconds to minutes
+rawDf_cleaned$Duration <- rawDf_cleaned$Duration..in.seconds./60
+
+# Generate the number of goals subject listed
+list_df <- rawDf_cleaned %>% dplyr::select(contains("goal_list"))
+rawDf_cleaned$listNum <- rowSums(list_df != "")
+list_df$MTurkCode <- rawDf_cleaned$MTurkCode
+
+# Generate the duration per goal
+rawDf_cleaned$timePerGoal <- rawDf_cleaned$Duration/rawDf_cleaned$listNum
+
+# write the listed goal file for data screening 
+write.csv(list_df, here("Baseline", "Inputs", "goalScreening.csv"), row.names = F)
+```
+
+Transform the data relevant to goal rating into a long format dataframe
+```{r}
+# subset goal rating related dataset 
+goalRating <- rawDf_cleaned %>%
+  select(starts_with("G", ignore.case = F)) %>%
+  select(-starts_with("GSE"),
+         -starts_with("GS"),
+         -starts_with("GAT"))
+
+goalRating <- bind_cols(goalRating, rawDf_cleaned[,c("MTurkCode","listNum", "total_goal")])
+
+# transform the dataset to long format
+goalRating_long <- goalRating %>% gather(variable, rating, G1_1:G41_5)
+
+# transform existing question number to the corresponding variable name and goal number
+
+goalRating_long$goal <- str_sub(goalRating_long$variable,-1,-1)
+
+variableName <- c("construal_level", "temporal_duration", "frequency", "specificity", "end_state_specificity", "approach_avoidance", "attainment_maintenance", "measurability", "importance", "meaningfulness", "instrumentality", "connectedness", "attractiveness_achievement", "attractiveness_progress", "social_desirability", "difficulty", "affordance", "attainability", "clarity", "control", "external_motivation", "introjected_motivation", "identified_motivation", "intrinsic_motivation", "ought_motivation", "ideal_motivation", "basic_needs", "commonality", "visibility", "external_importance", "conflict")
+progressName <- c("commitment", "urgency", "effort", "initial_time", "regret", "procrastination", "failure", "self_resources", "other_resources", "implementation_intention")
+nameList <- c(variableName, progressName)
+questionNum <- paste0("G", 1:41, "_")
+
+nameDf <- data.frame("question_number" = questionNum,
+                     "variable_name" = nameList)
+
+for (idx in 1: nrow(nameDf)){
+  goalRating_long$variable[grepl(nameDf$question_number[idx],goalRating_long$variable)] <- as.character(nameDf$variable_name[idx])
+}
+
+# get rid off the NAs for questions corresponding to goals that the subjects didn't list 
+goalRating_long <- goalRating_long[goalRating_long$goal <= goalRating_long$listNum,]
+```
+
+# Exclude participants
+
+### Exclusion Criteria 1: bots response & duplicated response
+
+All listed goals were viewed by Bernice and no participants were excluded based on the following rubric
+  
+Coding rubric:  
+0: passed the screening
+1: bots responses: listed random words or sentences, or copied phrases from the survey
+2: suspicious responses: listed words that seem irrelevant to goals
+3: duplicated responses: duplicated participants are identified when all 5 goals are identical. All their responses are coded as 3 except the first one. 
+
+### Exclusion Criteria 2:Task Duration
+
+Descriptive and histogram on timePerGoal (task duration / number of listed goals) for all participants
+```{r,warning=FALSE,message=FALSE}
+# Descriptive on duration
+describe(rawDf_cleaned$timePerGoal)
+
+# Histogram (after excluding the extreme cases)
+colors <- c(rep("red",1), rep("orange",29))
+rawDf_cleaned %>% 
+  filter(timePerGoal < 50) %>%
+  ggplot(aes(timePerGoal)) + geom_histogram(fill   = colors,
+                   colour = "black",
+                   alpha  = .8)
+```
+
+As pre-registered, the exclusion criteria is less than 5min per goal. One participant has met this criteria
+
+```{r}
+id_durationShort <- rawDf_cleaned[rawDf_cleaned$timePerGoal <5,c("MTurkCode", "Duration","timePerGoal", "listNum")]
+```
+
+### Exclusion Criteria 3: Attention check questions
+
+We set 4 attention check questions. We exclude subjects who missed at least 2 attention check question in the individual difference measures. 
+
+8 participants are subjected to exclusion based on this criteria
+```{r}
+# extract attention check questions
+checkDf <- rawDf_cleaned[,grepl("check",names(rawDf_cleaned))]
+checkDf$MTurkCode <- rawDf_cleaned$MTurkCode
+
+# compare to correct answers
+checkDf <- checkDf %>% 
+  mutate(corr_1 = check1 ==17, 
+         corr_2 = check2 ==3, 
+         corr_3 = check3 ==5, 
+         corr_4 = check4 ==2)
+
+checkDf$corr_sum <- rowSums(checkDf[,c("corr_1","corr_2","corr_3", "corr_4")],na.rm = T)
+
+# extract subject id with either got the second or the third attention question wrong
+id_missCheck <- checkDf %>% filter(corr_sum <= 2)
+
+# combine dataset
+rawDf_cleaned <- left_join(rawDf_cleaned, checkDf, by = "MTurkCode")
+```
+
+### Exclusion Criteria 3: Repetitive responses
+
+We extract sequence of identical numeric responses acrosss all questions and measure for each subject, and plot the maximal length of the sequence in a histogram. Outliers are visually inspected and excluded. As pre-registered, the exclusion criteria is more than 20 repetitive responses in a row. 3 participants met this criteria
+
+```{r}
+# extract columns with likert scale ratings 
+ratingDf <- goalRating %>%
+  select(-c("MTurkCode", "listNum", "total_goal")) %>%
+  bind_cols(select(rawDf_cleaned, "SWL1": "GAT10")) %>%
+  select(-starts_with("check"))
+
+# extract the max number of repetitive response in a row
+variation <- apply(ratingDf,1,function(x) rle(x))
+variation.length <-unlist(lapply(variation,function(x) max(x$lengths)))
+describe(variation.length)
+hist(variation.length, col = c(rep("orange", 8)))
+rawDf_cleaned$invariance_max <- variation.length
+
+# extract subject id who has more than 20 repetitive response in a row
+id_invariance <- rawDf_cleaned$MTurkCode[variation.length > 20]
+```
+
+### Exclusion Criteria 4: Missing data in the goal rating session
+
+Because subjects listed various number of goals, the total number of questions in the goal rating session for a given subject is calculated by the number of goal listed times the number of question per goal (39 questions). The porpotion of missing data in the goal rating session is then calculated and outliers are visual inspected through a histogram. In the pilot dataset, subjects who missed 10% is excluded (marked in red on the histogram)
+
+The max percentage of missing data is less than 4%. No subject met this excluding criteria 
+```{r,warning=FALSE,message=FALSE}
+# calculate the percentage of missing data 
+missDf <- goalRating_long %>%
+  group_by(MTurkCode) %>%
+  summarise(missNum = sum(is.na(rating)),
+            totalNum = mean(listNum) * 41,
+            missPerc = ((missNum/totalNum) * 100)) 
+
+# record the missing proportion
+rawDf_cleaned$missPerc <- missDf$missPerc
+
+# visualize the percentage of missing data
+color <- c(rep("orange", 29), "red")
+missDf %>% ggplot(aes(missPerc)) + 
+  geom_histogram(fill= color,
+                   colour = "black",
+                   alpha  = .8)
+
+# extract subject id who missed more than 10% 
+id_missRate <- missDf %>% filter(missPerc >10)
+```
+
+### Organize subjects who are excluded
+
+Exclude subjects if they were identified based on any of the exclusion Criteria. Based on all 5 exclusion criteria, 5 participants should be excluded. 
+
+```{r}
+# aggregate id and relevant info.
+id_candidate <- unique(c(id_durationShort$MTurkCode, id_missCheck$MTurkCode, id_invariance))
+candidateDf <- rawDf_cleaned %>% dplyr::select(c("MTurkCode", "Duration", "timePerGoal","listNum", "corr_sum", "invariance_max", "missPerc")) %>% filter(MTurkCode %in% id_candidate)
+
+# check relevant info.
+candidateDf %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+```
+
+clean datasets
+```{r}
+# exclude subject from both the wide and long format datasets 
+cleanedDf <- rawDf_cleaned[! rawDf_cleaned$MTurkCode %in% id_candidate,]
+goalRating_long_Clean <- goalRating_long[! goalRating_long$MTurkCode %in% id_candidate, ]
+```
+
+# Data transformation
+
+#### The "I'm not sure" response   
+
+"construal_level","approach_avoidance" and "attainment_maintenance" question have an option for "I'm not sure" because they ask subjects to categorize their goals. The corresponding numeric value is 8. These values are transformed to 99 in order to be inspected. 
+
+```{r}
+goalRating_long_R <- goalRating_long_Clean
+
+# transform the "I'm not sure" response to 99
+goalRating_long_R <- goalRating_long_R %>%
+  mutate(rating = replace(rating,
+                          rating == 8 & variable %in% c("construal_level","approach_avoidance","attainment_maintenance"),
+                          99))
+
+```
+
+#### The "not specified" response
+
+temporal_duration, frequency and end_state_specificity question have an option for "not specified" because they ask about features that may not be applicable to all goals. The corresponding numeric value for each question is specified in the script. These values are transformed to 999 in order to be inspected.
+
+```{r}
+# transform the "not specified" response to 999
+goalRating_long_R <- goalRating_long_R %>%
+  mutate(rating = replace(rating,
+                          rating == 5 & variable == "temporal_duration", 999)) %>%
+  mutate(rating = replace(rating, rating == 3 & variable == "frequency", 999)) %>%
+  mutate(rating = replace(rating, rating == 4 & variable == "end_state_specificity", 999))
+
+```
+
+### Reverse code 
+
+Based on the correlation matrix, I decided to reverse code 5 variable: "approach_avoidance", "initial_time", "end_state_specificity", "frequency", "attainment_maintenance". The decision is based on their correlations with other variables. Before recording, they are negatively correlated with most of the variable. 
+
+```{r}
+goalRating_long_R$rating[goalRating_long_R$variable == "approach_avoidance"] <- recode(goalRating_long_R$rating[goalRating_long_R$variable == "approach_avoidance"], '1' = 7, '2' = 6, '3' = 5, '5' = 3, '6' = 2, '7' = 1)
+goalRating_long_R$variable[goalRating_long_R$variable == "approach_avoidance"] <- "approach_avoidance_R"
+
+goalRating_long_R$rating[goalRating_long_R$variable == "initial_time"] <- recode(goalRating_long_R$rating[goalRating_long_R$variable == "initial_time"], '1' = 8, '2' = 7, '3' = 6, '4' = 5 , '5' = 4, '6' = 3, '7' = 2, '8' = 1)
+goalRating_long_R$variable[goalRating_long_R$variable == "initial_time"] <- "initial_time_R"
+
+goalRating_long_R$rating[goalRating_long_R$variable == "end_state_specificity"] <- recode(goalRating_long_R$rating[goalRating_long_R$variable == "end_state_specificity"], '1' = 3, '2' = 2, '3' = 1)
+goalRating_long_R$variable[goalRating_long_R$variable == "end_state_specificity"] <- "end_state_specificity_R"
+
+goalRating_long_R$rating[goalRating_long_R$variable == "frequency"] <- recode(goalRating_long_R$rating[goalRating_long_R$variable == "frequency"], '1' = 2, '2' = 1)
+goalRating_long_R$variable[goalRating_long_R$variable == "frequency"] <- "frequency_R"
+
+goalRating_long_R$rating[goalRating_long_R$variable == "attainment_maintenance"] <- recode(goalRating_long_R$rating[goalRating_long_R$variable == "attainment_maintenance"], '1' = 7, '2' = 6, '3' = 5, '5' = 3, '6' = 2, '7' = 1)
+goalRating_long_R$variable[goalRating_long_R$variable == "attainment_maintenance"] <- "attainment_maintenance_R"
+```
+
+# Compute individual differences measures
+
+The scale composite scores and subscale composite scores are generated based on the scoring keys. A subject will be remove from analysis for a given scale if this person missed more than 1/3 of the items. The composite score for the scale will be NA for that subject. 
+
+### The Big Five Inventory -2 Extra Short Form (BFI)
+
+Data screening: range is normal, and no subject need to be excluded due to missing data
+```{r}
+# extract relevant data
+BFI_items <- cleanedDf[,grepl("BFI",names(cleanedDf))]
+
+# check range
+range(BFI_items, na.rm = T)
+
+# check the number of missing data per subject
+BFI_NA <- rowSums(is.na(BFI_items))
+
+# check if there's any subject miss 1/3 of the items
+which(BFI_NA > 1/3 * ncol(BFI_items))
+```
+
+Scoring
+```{r}
+# reverse coding
+BFI_R <-  BFI_items %>%
+  mutate(BFI1_R = 6 - BFI1,
+         BFI3_R = 6 - BFI3,
+         BFI7_R = 6 - BFI7,
+         BFI8_R = 6 - BFI8,
+         BFI10_R = 6 - BFI10,
+         BFI14_R = 6 - BFI14) %>%
+  dplyr :: select(-BFI1, -BFI3, -BFI7, -BFI8, -BFI10, -BFI14)
+
+# calculate mean scores for each sub-scale
+BFI_scores <- BFI_R %>%
+  mutate(Extraversion_mean = rowMeans(dplyr :: select(., BFI1_R, BFI6,BFI11), na.rm = TRUE),
+         Agreeableness_mean = rowMeans(dplyr :: select(., BFI2, BFI7_R,BFI12), na.rm = TRUE),
+         Conscientiousness_mean = rowMeans(dplyr :: select(., BFI3_R, BFI8_R,BFI13), na.rm = TRUE),
+         Neuroticism_mean = rowMeans(dplyr :: select(., BFI4, BFI9,BFI14_R), na.rm = TRUE),
+         OpenMindedness_mean = rowMeans(dplyr :: select(., BFI5, BFI10_R,BFI15), na.rm = TRUE)) %>%
+  dplyr :: select(Extraversion_mean, Agreeableness_mean, Conscientiousness_mean, Neuroticism_mean, OpenMindedness_mean)
+
+# check reliability
+alpha(dplyr::select(BFI_R, BFI1_R, BFI6,BFI11))$total$std.alpha
+alpha(dplyr::select(BFI_R, BFI2, BFI7_R,BFI12))$total$std.alpha
+alpha(dplyr::select(BFI_R, BFI3_R, BFI8_R,BFI13))$total$std.alpha
+alpha(dplyr::select(BFI_R, BFI4, BFI9,BFI14_R))$total$std.alpha
+alpha(dplyr::select(BFI_R, BFI5, BFI10_R,BFI15))$total$std.alpha
+```
+
+### The Satisfaction with Life Scale (SWL)
+
+Data screening
+```{r}
+# extract relevant data
+SWL_items <- cleanedDf[,grepl("SWL",names(cleanedDf))]
+
+# check range
+range(SWL_items, na.rm = T)
+
+# check the number of missing data per subject
+SWL_NA <- rowSums(is.na(SWL_items))
+
+# check if there's any subject miss 1/3 of the items
+which(SWL_NA > 1/3 * ncol(SWL_items))
+```
+
+Scoring
+```{r}
+# calculate the means
+SWL_mean <- SWL_items %>%
+  mutate(SWL_mean = rowMeans(., na.rm = TRUE)) %>%
+  dplyr :: select(SWL_mean)
+
+# check reliability
+alpha(SWL_items)$total$std.alpha
+
+# distribution
+hist(SWL_mean$SWL_mean)
+```
+
+### Brief Self Control Scale (BSCS)
+Data screening:
+```{r}
+# extract relevant data
+BSCS_items <- cleanedDf[,grepl("BSCS",names(cleanedDf))]
+
+# check range
+range(BSCS_items, na.rm = T)
+
+# check the number of missing data per subject
+BSCS_NA <- rowSums(is.na(BSCS_items))
+
+# check if there's any subject miss 1/3 of the items
+which(BSCS_NA > 1/3 * ncol(BSCS_items))
+```
+
+scoring
+```{r}
+# reverse coding
+BSCS_R <-  BSCS_items %>%
+  mutate(BSCS2_R = 6 - BSCS2,
+         BSCS3_R = 6 - BSCS3,
+         BSCS4_R = 6 - BSCS4,
+         BSCS5_R = 6 - BSCS5,
+         BSCS7_R = 6 - BSCS7,
+         BSCS9_R = 6 - BSCS9,
+         BSCS10_R = 6 - BSCS10,
+         BSCS12_R = 6 - BSCS12,
+         BSCS13_R = 6 - BSCS13) %>%
+  dplyr :: select(-BSCS2, -BSCS3, -BSCS4, -BSCS5, -BSCS7, -BSCS9,  -BSCS10,  -BSCS12,  -BSCS13)
+
+# calculate mean
+BSCS_mean <- BSCS_R %>%
+  mutate(BSCS_mean = rowMeans(., na.rm = TRUE)) %>%
+  dplyr :: select(BSCS_mean)
+
+# check reliability
+alpha(BSCS_R)$total$std.alpha
+```
+
+### General Self Efficacy (GSE)
+Data screening: 
+```{r}
+# extract relevant data
+GSE_items <- cleanedDf[,grepl("GSE",names(cleanedDf))]
+
+# check range
+range(GSE_items, na.rm = T)
+
+# check the number of missing data per subject
+GSE_NA <- rowSums(is.na(GSE_items))
+
+# check if there's any subject miss 1/3 of the items
+which(GSE_NA > 1/3 * ncol(GSE_items))
+```
+
+Scoring
+```{r}
+# calculate the means
+GSE_mean <- GSE_items %>%
+  mutate(GSE_mean = rowMeans(., na.rm = TRUE)) %>%
+  dplyr :: select(GSE_mean)
+
+# check reliability
+alpha(GSE_items)$total$std.alpha
+```
+
+### Planfulness Scale (PS)
+Data screening:
+```{r}
+# extract relevant data
+PS_items <- cleanedDf[,grepl("PS",names(cleanedDf))]
+
+# check range
+range(PS_items, na.rm = T)
+
+# check the number of missing data per subject
+PS_NA <- rowSums(is.na(PS_items))
+
+# check if there's any subject miss 1/3 of the items
+which(PS_NA > 1/3 * ncol(PS_items))
+
+```
+
+```{r}
+# reverse coding
+PS_R <-  PS_items %>%
+  mutate(PS2_R = 6 - PS2,
+         PS3_R = 6 - PS3,
+         PS4_R = 6 - PS4,
+         PS6_R = 6 - PS6,
+         PS10_R = 6 - PS10,
+         PS11_R = 6 - PS11,
+         PS12_R = 6 - PS12,
+         PS13_R = 6 - PS13,
+         PS18_R = 6 - PS18,
+         PS20_R = 6 - PS20,
+         PS21_R = 6 - PS21,
+         PS22_R = 6 - PS22,
+         PS25_R = 6 - PS25,
+         PS29_R = 6 - PS29,
+         PS30_R = 6 - PS30) %>%
+  dplyr :: select(-PS2, -PS3, -PS4, -PS6, -PS10, -PS11, -PS12, -PS13, -PS18, -PS20, -PS21,-PS22, -PS25, -PS29, -PS30)
+
+# calculate the means
+PS_mean <- PS_R %>%
+  mutate(PS_mean = rowMeans(., na.rm = TRUE)) %>%
+  dplyr :: select(PS_mean)
+
+# check reliability
+alpha(PS_R)$total$std.alpha
+```
+
+### ROSENBERG SELF-ESTEEM SCALE (RSE)
+Data screening: 
+```{r}
+# extract relevant data
+RSE_items <- cleanedDf[,grepl("RSE",names(cleanedDf))]
+
+# check range
+range(RSE_items, na.rm = T)
+
+# check the number of missing data per subject
+RSE_NA <- rowSums(is.na(RSE_items))
+
+# check if there's any subject miss 1/3 of the items
+which(RSE_NA > 1/3 * ncol(RSE_items))
+```
+
+scoring
+```{r}
+# reverse coding
+RSE_R <-  RSE_items %>%
+  mutate(
+         RSE2_R = 3 - RSE2,
+         RSE5_R = 3 - RSE5,
+         RSE6_R = 3 - RSE6,
+         RSE8_R = 3 - RSE8,
+         RSE9_R = 3 - RSE9) %>%
+  dplyr :: select(-RSE2, -RSE5, -RSE6, -RSE8, -RSE9)
+
+# calculate the means
+RSE_mean <- RSE_R %>%
+  mutate(RSE_mean = rowMeans(., na.rm = TRUE)) %>%
+  dplyr :: select(RSE_mean)
+
+# check reliability
+alpha(RSE_R)$total$std.alpha
+```
+
+### The Life Engagement Test (LET)
+Data screening: range is normal, and no subject need to be excluded due to missing data
+```{r}
+# extract relevant data
+LET_items <- cleanedDf[,grepl("LET",names(cleanedDf))]
+
+# check range
+range(LET_items, na.rm = T)
+
+# check the number of missing data per subject
+LET_NA <- rowSums(is.na(LET_items))
+
+# check if there's any subject miss 1/3 of the items
+which(LET_NA > 1/3 * ncol(LET_items))
+```
+
+scoring
+```{r}
+# reverse coding
+LET_R <-  LET_items %>%
+  mutate(
+         LET1_R = 6 - LET1,
+         LET3_R = 6 - LET3,
+         LET5_R = 6 - LET5) %>%
+  dplyr :: select(-LET1, -LET3, -LET5)
+
+# calculate the means
+LET_mean <- LET_R %>%
+  mutate(LET_mean = rowMeans(., na.rm = TRUE)) %>%
+  dplyr :: select(LET_mean)
+
+# check reliability
+alpha(LET_R)$total$std.alpha
+```
+
+### Perceived Stress Scale
+
+```{r}
+# extract relevant data
+PSS_items <- cleanedDf[,grepl("PSS",names(cleanedDf))]
+
+# check range
+range(PSS_items, na.rm = T)
+
+# check the number of missing data per subject
+PSS_NA <- rowSums(is.na(PSS_items))
+
+# check if there's any subject miss 1/3 of the items
+which(PSS_NA > 1/3 * ncol(PSS_items))
+```
+
+```{r}
+# reverse coding
+PSS_R <-  PSS_items %>%
+  mutate(
+         PSS4_R = 4 - PSS4,
+         PSS5_R = 4 - PSS5,
+         PSS7_R = 4 - PSS7,
+         PSS8_R = 4 - PSS8) %>%
+  dplyr :: select(-PSS4, -PSS5, -PSS7,-PSS8)
+
+# calculate the means
+PSS_mean <- PSS_R %>%
+  mutate(PSS_mean = rowMeans(., na.rm = TRUE)) %>%
+  dplyr :: select(PSS_mean)
+
+# check reliability
+alpha(PSS_R)$total$std.alpha
+
+# distribution
+hist(PSS_mean$PSS_mean)
+```
+
+### Kessler Psychological Distress Scale
+
+The option (Some of the time) was accidentally recoded as 6 on Qualtrics, which should be 3. 
+```{r}
+# extract relevant data
+K10_items <- cleanedDf[,grepl("K10",names(cleanedDf))]
+
+# check range
+range(K10_items, na.rm = T)
+
+# check the number of missing data per subject
+K10_NA <- rowSums(is.na(K10_items))
+
+# check if there's any subject miss 1/3 of the items
+which(K10_NA > 1/3 * ncol(K10_items))
+```
+
+
+```{r}
+# re-code 6 as 3
+K10_items <- K10_items %>% replace(. == 6, 3)
+
+# calculate the means
+K10_mean <- K10_items %>%
+  mutate(K10_mean = rowMeans(., na.rm = TRUE)) %>%
+  dplyr :: select(K10_mean)
+
+# check reliability
+alpha(K10_items)$total$std.alpha
+
+# distribution
+hist(K10_mean$K10_mean)
+```
+
+# BIS/BAS Scale
+
+```{r}
+# extract relevant data
+BISBAS_items <- cleanedDf[,grepl("BISBAS",names(cleanedDf))]
+
+# check range
+range(BISBAS_items, na.rm = T)
+
+# check the number of missing data per subject
+BISBAS_NA <- rowSums(is.na(BISBAS_items))
+
+# check if there's any subject miss 1/3 of the items
+which(BISBAS_NA > 1/3 * ncol(BISBAS_items))
+```
+
+```{r}
+# reverse coding
+BISBAS_R <-  BISBAS_items %>%
+  mutate(
+         BISBAS3_R = 5 - BISBAS3,
+         BISBAS4_R = 5 - BISBAS4,
+         BISBAS5_R = 5 - BISBAS5,
+         BISBAS7_R = 5 - BISBAS7,
+         BISBAS8_R = 5 - BISBAS8,
+         BISBAS9_R = 5 - BISBAS9,
+         BISBAS10_R = 5 - BISBAS10,
+         BISBAS12_R = 5 - BISBAS12,
+         BISBAS13_R = 5 - BISBAS13,
+         BISBAS14_R = 5 - BISBAS14,
+         BISBAS15_R = 5 - BISBAS15,
+         BISBAS16_R = 5 - BISBAS16,
+         BISBAS18_R = 5 - BISBAS18,
+         BISBAS19_R = 5 - BISBAS19,
+         BISBAS20_R = 5 - BISBAS20,
+         BISBAS21_R = 5 - BISBAS21,
+         BISBAS23_R = 5 - BISBAS23,
+         BISBAS24_R = 5 - BISBAS24,) %>%
+  dplyr :: select(-BISBAS3, -BISBAS4, -BISBAS1, -BISBAS5, -BISBAS6, -BISBAS7, -BISBAS8, -BISBAS9, -BISBAS10, -BISBAS11, -BISBAS12, -BISBAS13, -BISBAS14, -BISBAS15,-BISBAS16,-BISBAS17,-BISBAS18,-BISBAS19,-BISBAS20, -BISBAS21, -BISBAS23, -BISBAS24)
+
+# calculate the means
+BISBAS_scores <- BISBAS_R %>%
+  mutate(BAS_drive = rowMeans(dplyr :: select(., BISBAS3_R, BISBAS9_R,BISBAS12_R, BISBAS21_R), na.rm = TRUE),
+         BAS_funSeeking = rowMeans(dplyr :: select(., BISBAS5_R, BISBAS10_R,BISBAS15_R, BISBAS20_R), na.rm = TRUE),
+         BAS_rewardResponse = rowMeans(dplyr :: select(., BISBAS4_R, BISBAS7_R,BISBAS14_R, BISBAS18_R, BISBAS23_R), na.rm = TRUE),
+         BIS = rowMeans(dplyr :: select(., BISBAS2, BISBAS8_R,BISBAS13_R, BISBAS16_R, BISBAS19_R, BISBAS22, BISBAS24_R), na.rm = TRUE)) %>%
+  dplyr :: select(BAS_drive, BAS_funSeeking, BAS_rewardResponse, BIS)
+
+# check reliability
+alpha(dplyr::select(BISBAS_R, BISBAS3_R, BISBAS9_R,BISBAS12_R, BISBAS21_R))$total$std.alpha
+alpha(dplyr::select(BISBAS_R, BISBAS5_R, BISBAS10_R,BISBAS15_R, BISBAS20_R))$total$std.alpha
+alpha(dplyr::select(BISBAS_R, BISBAS4_R, BISBAS7_R,BISBAS14_R, BISBAS18_R, BISBAS23_R))$total$std.alpha
+alpha(dplyr::select(BISBAS_R, BISBAS2, BISBAS8_R,BISBAS13_R, BISBAS16_R, BISBAS19_R, BISBAS22, BISBAS24_R))$total$std.alpha
+```
+
+Grit Scale (GS)
+
+```{r}
+# extract relevant data
+GS_items <- cleanedDf[,grepl("GS",names(cleanedDf))] %>%
+  select(-starts_with("GSE"))
+
+# check range
+range(GS_items, na.rm = T)
+
+# check the number of missing data per subject
+GS_NA <- rowSums(is.na(GS_items))
+
+# check if there's any subject miss 1/3 of the items
+which(GS_NA > 1/3 * ncol(GS_items))
+```
+
+```{r}
+# reverse coding
+GS_R <-  GS_items %>%
+  mutate(
+         GS1_R = 6 - GS1,
+         GS3_R = 6 - GS3,
+         GS5_R = 6 - GS5, 
+         GS6_R = 6 - GS6) %>%
+  dplyr :: select(-GS1, -GS3, -GS5, -GS6)
+
+# calculate the means
+GS_mean <- GS_R %>%
+  mutate(GS_mean = rowMeans(., na.rm = TRUE)) %>%
+  dplyr :: select(GS_mean)
+
+# check reliability
+alpha(GS_R)$total$std.alpha
+```
+
+Goal Adjustment Tendency (GAT)
+
+```{r}
+# extract relevant data
+GAT_items <- cleanedDf[,grepl("GAT",names(cleanedDf))]
+
+# check range
+range(GAT_items, na.rm = T)
+
+# check the number of missing data per subject
+GAT_NA <- rowSums(is.na(GAT_items))
+
+# check if there's any subject miss 1/3 of the items
+which(GAT_NA > 1/3 * ncol(GAT_items))
+```
+
+```{r}
+# reverse coding
+GAT_R <-  GAT_items %>%
+  mutate(
+         GAT2_R = 6 - GAT2,
+         GAT4_R = 6 - GAT4) %>%
+  dplyr :: select(-GAT2, -GAT4)
+
+# calculate the means
+GAT_scores <- GAT_R %>%
+  mutate(GAT_disengagement = rowMeans(dplyr :: select(., BISBAS3_R, BISBAS9_R,BISBAS12_R, BISBAS21_R), na.rm = TRUE),
+         BAS_funSeeking = rowMeans(dplyr :: select(., BISBAS5_R, BISBAS10_R,BISBAS15_R, BISBAS20_R), na.rm = TRUE),
+         BAS_rewardResponse = rowMeans(dplyr :: select(., BISBAS4_R, BISBAS7_R,BISBAS14_R, BISBAS18_R, BISBAS23_R), na.rm = TRUE),
+         BIS = rowMeans(dplyr :: select(., BISBAS2, BISBAS8_R,BISBAS13_R, BISBAS16_R, BISBAS19_R, BISBAS22, BISBAS24_R), na.rm = TRUE)) %>%
+  dplyr :: select(BAS_drive, BAS_funSeeking, BAS_rewardResponse, BIS)
+
+# check reliability
+alpha(GS_R)$total$std.alpha
+```
