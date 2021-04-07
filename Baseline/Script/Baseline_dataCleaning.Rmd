@@ -32,7 +32,7 @@ Raw data was directly downloaded from Qualtric on 03/24/21. A filter that only i
 
 ```{r load data}
 # load raw data
-rawDf <- read.csv(here("Raw_data", "Goal Longitudinal_Baseline_March 25, 2021_00.00.csv"), stringsAsFactors = F)
+rawDf <- read.csv(here("Raw_data", "Goal Longitudinal_Baseline_April 7, 2021_11.57.csv"), stringsAsFactors = F)
 ```
 
 Organize the raw dataframe
@@ -79,6 +79,10 @@ goalRating <- rawDf_cleaned %>%
          -starts_with("GAT"))
 
 goalRating <- bind_cols(goalRating, rawDf_cleaned[,c("MTurkCode","listNum", "total_goal")])
+  
+# this step is to address to duplicated question of G30 for goal 3, 4, and 5
+goalRating[, c("G30_3", "G30_4", "G30_5")] <- NA
+
 
 # transform the dataset to long format
 goalRating_long <- goalRating %>% gather(variable, rating, G1_1:G41_5)
