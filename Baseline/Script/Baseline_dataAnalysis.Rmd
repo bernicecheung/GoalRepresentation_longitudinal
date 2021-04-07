@@ -1,0 +1,204 @@
+---
+title: "Baseline_dataAnalysis"
+author: "Bernice Cheung"
+date: "4/6/2021"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, echo=FALSE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(psych)
+library(ggplot2)
+library(stringr)
+library(knitr)
+library(lme4)
+library(nFactors)
+library(corrplot)
+library(janitor)
+library(kableExtra)
+library(GPArotation)
+library(here)
+```
+
+load data: 246 subjects, with 845 goals are included in the following analysis
+
+```{r}
+goalRating_long_R <- read.csv(here("Baseline", "Inputs", "goalRating_long_R.csv"),stringsAsFactors = F)
+
+goalDf_wide <- read.csv(here("Baseline", "Inputs", "goalDf_wide.csv"),stringsAsFactors = F)
+
+indivDiffDf <- read.csv(here("Baseline", "Inputs", "indivDiffDf.csv"),stringsAsFactors = F)
+```
+
+# Data Screening for goal representation assessment
+
+### Missing data
+
+Check the number of missing data per variable, and below is the top 5 variables. Missing data is rare for all variables
+```{r}
+# check the number of "I'm not sure" responses per variable
+totalGoal <- nrow(goalRating_long_R)/41
+
+goalRating_long_R %>%
+  filter(is.na(rating)) %>%
+  tabyl(variable) %>%
+  mutate(percent = n/totalGoal) %>%
+  arrange(desc(percent)) %>%
+  head(5)
+```
+
+### The "I'm not sure" response
+
+"construal_level","approach_avoidance" and "attainment_maintenance" question have an option for "I'm not sure" because they ask subjects to categorize their goals.  
+
+around 1% of the goals had "I'm not sure" as the response. 
+```{r}
+# check the number of "I'm not sure" responses per varialbe
+goalRating_long_R %>%
+  filter(rating == 99) %>%
+  tabyl(variable) %>%
+  mutate(percent = n/totalGoal) %>%
+  arrange(desc(percent))
+```
+
+### The "not specified" response  
+
+temporal_duration, frequency and end_state_specificity question have an option for "not specified" because they ask about features that may not be applicable to all goals.  
+
+around 5% of the responses are "not specified"
+```{r}
+# check the number of "not specified" responses per varialbe
+goalRating_long_R %>%
+  filter(rating == 999) %>%
+  tabyl(variable) %>%
+  mutate(percent = n/totalGoal) %>%
+  arrange(desc(percent))
+```
+
+### Transform all special cases to NAs
+
+All "I'm not sure" and "not specified" responses will be treated as missing data. 
+
+```{r}
+# transform 99 & 999 to NAs
+goalRating_long_R <- goalRating_long_R %>% 
+  mutate(rating = replace(rating, rating == 99 | rating == 999, NA))
+```
+
+
+### The number of claimed goals
+
+Descriptive on the number of goals subject claimed to have prior to listing them (lower than the previous mTurk study)
+```{r}
+describe(goalDf_wide$total_goal)
+```
+
+Visualize the number of claimed goals per subject after excluding the extreme value (> 20) (1 claimed 40)
+```{r}
+breaks = (1:20)
+goalDf_wide %>% 
+  filter(total_goal < 20) %>%
+  ggplot(aes(x = total_goal)) + 
+  scale_x_continuous(labels=scales::comma(breaks, accuracy = 1), breaks=breaks) + 
+  geom_histogram(fill = "orange", 
+                 colour = "black",
+                 binwidth = 1) + 
+  labs(x="Number of claimed goals", y="# of participants") +
+  theme_classic(base_size = 18) 
+```
+
+
+The percentage of subjects who claimed having more than 5 goals: 9.8% 
+```{r}
+# get the number of total subject
+totalSub <- nrow(indivDiffDf)
+
+length(goalDf_wide$total_goal[goalDf_wide$total_goal>5])/totalSub
+```
+
+Descriptive on the number of goals participants actual listed (similar to all previous study)
+```{r}
+describe(goalDf_wide$listNum)
+```
+
+```{r}
+breaks <- (1:5)
+goalDf_wide %>% 
+  ggplot(aes(x = listNum)) + 
+  scale_x_continuous(labels=scales::comma(breaks, accuracy = 1), breaks=seq(1, 5, by = 1)) + 
+  geom_histogram(fill = "orange", 
+                 colour = "black",
+                 binwidth = 1) + 
+  labs(x="Number of listed goals", y="# of participants") +
+  theme_classic(base_size = 18) 
+```
+
+number of people who listed 1 goal: 9
+```{r}
+length(goalDf_wide$listNum[goalDf_wide$listNum == 1])
+```
+
+
+descriptive on the differences between the number of claimed goals and listed goals (after exclude the extreme case)
+```{r}
+goalDf_wide <-goalDf_wide %>%
+  mutate(diffNum = total_goal - listNum)
+
+goalDf_sum_wide_clean <- goalDf_wide %>%filter(total_goal < 20)
+  
+describe(goalDf_sum_wide_clean$diffNum)
+
+breaks <- (-4:15)
+goalDf_sum_wide_clean %>% 
+  ggplot(aes(x = diffNum)) + 
+  scale_x_continuous(labels=scales::comma(breaks, accuracy = 1), breaks=breaks) + 
+  geom_histogram(fill = "orange", 
+                 colour = "black",
+                 binwidth = 1) + 
+  labs(x="Number of claimed goals - listed goals", y="# of participants") +
+  theme_classic(base_size = 18) 
+```
+
+
+percentage of people who listed more goals than they claimed: 13%
+```{r}
+length(goalDf_wide$diffNum[goalDf_wide$diffNum <0])/totalSub *100
+```
+
+
+percentage of people who listed less goals more than they claimed: 14%
+```{r}
+length(goalDf_wide$diffNum[goalDf_wide$diffNum >0])/totalSub *100
+```
+
+
+# Goal Representation Ratings
+
+### Descriptive stats
+```{r}
+# descriptive stats for each variable 
+goalRating_long_R %>%
+  dplyr::select(variable, rating) %>%
+  group_by(variable) %>%
+  summarize(mean = mean(rating, na.rm = TRUE),
+            sd = sd(rating, na.rm = TRUE), 
+            n = n(),
+            min = min(rating, na.rm = TRUE),
+            max = max(rating, na.rm = TRUE),
+            skew = skew(rating, na.rm = T), 
+            kurtosi = kurtosi(rating, na.rm = T)
+            ) %>%
+  arrange(skew) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
