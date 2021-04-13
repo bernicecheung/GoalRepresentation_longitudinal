@@ -35,6 +35,31 @@ Raw data was directly downloaded from Qualtric on 03/24/21. A filter that only i
 rawDf <- read.csv(here("Raw_data", "Goal Longitudinal_Baseline_April 7, 2021_11.57.csv"), stringsAsFactors = F)
 ```
 
+double check goal representation questions
+```{r}
+# subset goal rating related question 
+goal_raw <- rawDf %>%
+  select(starts_with("G", ignore.case = F)) %>%
+  select(-starts_with("GSE"),
+         -starts_with("GS"),
+         -starts_with("GAT"))
+
+goal_name <- goal_raw[1,] %>%
+  pivot_longer(
+    cols = contains("G"),
+    names_to = c("q_num", "goal"),
+    values_to = "question",
+    names_prefix = "G_",
+    names_sep = "_"
+  ) %>%
+  mutate(question_clean = str_sub(question, start = 102L)) %>%
+  select(-question) %>%
+  pivot_wider(
+    names_from = goal,
+    values_from = question_clean
+  )
+```
+
 Organize the raw dataframe
 ```{r organize raw}
 # delete the first two rows of labels and questions 
