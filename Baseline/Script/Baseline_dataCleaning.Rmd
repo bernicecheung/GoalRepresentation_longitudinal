@@ -33,6 +33,8 @@ Raw data was directly downloaded from Qualtric on 03/24/21. A filter that only i
 ```{r load data}
 # load raw data
 rawDf <- read.csv(here("Raw_data", "Goal Longitudinal_Baseline_April 7, 2021_11.57.csv"), stringsAsFactors = F)
+# load subject paring document
+pairDf <- read.csv(here("Baseline", "Inputs", "subPairing.csv"))
 ```
 
 double check goal representation questions
@@ -72,13 +74,17 @@ write.csv(rawDf_cleaned, here("Baseline", "Inputs", "raw_clean.csv"), row.names 
 rawDf_cleaned <- read.csv(here("Baseline", "Inputs", "raw_clean.csv"),stringsAsFactors = F)
 ```
 
+Use email address to match the mTurk worker ID
+```{r}
+# rename the pairing Df
+names(pairDf) <- c("MTurkCode", "email")
+
+rawDf_cleaned <- rawDf_cleaned %>%
+  left_join(pairDf, by = "email")
+```
+
 Transform and generate variables
 ```{r}
-# convert the secret code to MTurkcode
-rawDf_cleaned <- rawDf_cleaned %>%
-  #rowwise() %>%
-  mutate(MTurkCode = as.numeric(str_sub(Secrete.Code, start = 13L, end = -1L)))
-
 # convert the duration in seconds to minutes
 rawDf_cleaned$Duration <- rawDf_cleaned$Duration..in.seconds./60
 
