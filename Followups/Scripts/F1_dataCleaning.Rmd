@@ -1,0 +1,59 @@
+---
+title: "F1_dataCleaning"
+author: "Bernice Cheung"
+date: "4/28/2021"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r libraries, echo=FALSE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(psych)
+library(janitor)
+library(kableExtra)
+library(here)
+```
+
+
+```{r load data}
+# load raw data
+rawDf <- read.csv(here("Raw_data", "Goal Longitudinal_F1_April 28, 2021_18.07.csv"), stringsAsFactors = F)
+```
+
+
+Organize the raw dataframe
+```{r organize raw}
+# delete the first two rows of labels and questions 
+rawDf_cleaned <- rawDf[-c(1,2),]
+
+# write the data without the 2 rows
+write.csv(rawDf_cleaned, here("Baseline", "Inputs", "raw_clean.csv"), row.names = F)
+
+# reload the raw cleaned dataframe
+rawDf_cleaned <- read.csv(here("Baseline", "Inputs", "raw_clean.csv"),stringsAsFactors = F)
+```
+
+check duration
+```{r}
+rawDf_cleaned$duration <- rawDf_cleaned$Duration..in.seconds./60
+
+# check durations
+describe(rawDf_cleaned$duration)
+
+hist(rawDf_cleaned$duration)
+
+# check subjects who completed within 5 minutes
+rawDf_cleaned %>%
+  select(Goal1,Goal2, Goal3, Goal4,Goal5, duration) %>%
+  arrange(duration) %>%
+  head(10)
+```
+
