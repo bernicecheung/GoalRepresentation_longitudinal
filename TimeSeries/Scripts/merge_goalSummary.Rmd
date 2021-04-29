@@ -1,0 +1,80 @@
+---
+title: "merge_goalSummary"
+author: "Bernice Cheung"
+date: "4/28/2021"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, echo=FALSE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(psych)
+library(janitor)
+library(kableExtra)
+library(here)
+```
+
+import cleaned data
+```{r}
+# import baseline data (after screening)
+baselineDf <- read.csv(here("Baseline", "Inputs", "wideDf.csv"))
+# import subject paring data
+pairDf <- read.csv(here("TimeSeries", "Inputs", "subPairing.csv"))
+# import F1 data
+F1Df <- read.csv(here("Followups", "Inputs", "raw_F1_clean.csv"))
+```
+
+merge baseline data
+```{r}
+subSummaryDf <- pairDf %>%
+  left_join(baselineDf, by = c("AmazonIdentifier" = "MTurkCode")) %>%
+  mutate(baseline_complete = ifelse(is.na(Finished), 0, 1)) %>%
+  select("MTurkCode" = AmazonIdentifier, baseline_complete, listNum, contains("Type"))
+```
+
+merge follow-1 data
+```{r}
+# extract F1 current status
+F1Df_status <- F1Df %>%
+  select(workerId, contains("status_"))
+
+# merge wide format data
+subSummaryDf <- subSummaryDf %>%
+  left_join(F1Df_status, by = c("MTurkCode" = "workerId")) %>%
+  mutate(F1_complete = ifelse(is.na(status_F1_1), 0, 1))
+
+```
+
+transform to long format
+```{r}
+# transform the summary df into the long format
+subSummaryDf_l <- subSummaryDf %>%
+  select(-contains("status")) %>%
+  pivot_longer(
+    cols = contains("Type"), 
+    names_to = "goalOrder", 
+    values_to = "goalType",
+    names_prefix = "goalType_"
+  )
+
+# transform the status into a long format
+F1Df_status_l <- F1Df_status %>%
+  pivot_longer(
+    cols = contains("status"), 
+    names_to = "goalOrder", 
+    values_to = "F1_status",
+    names_prefix = "status_F1_"
+  )
+
+# Merge the two long format
+subSummaryDf_l <- subSummaryDf_l %>%
+  left_join(F1Df_status_l, by = c("MTurkCode" = "workerId", "goalOrder" = "goalOrder"))
+```
+
