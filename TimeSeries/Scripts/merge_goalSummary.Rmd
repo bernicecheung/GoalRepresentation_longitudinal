@@ -78,3 +78,29 @@ subSummaryDf_l <- subSummaryDf_l %>%
   left_join(F1Df_status_l, by = c("MTurkCode" = "workerId", "goalOrder" = "goalOrder"))
 ```
 
+summary goal status at F1
+```{r}
+statusSum_F1 <- subSummaryDf_l %>%
+  summarise(pursuit = sum(F1_status == 1, na.rm = T), 
+            complete = sum(F1_status == 2, na.rm = T),
+            abandon = sum(F1_status == 3, na.rm = T),
+            modify = sum(F1_status == 4, na.rm = T)) %>%
+  bind_cols(summarise(subSummaryDf, totalGoal = sum(listNum, na.rm = T))) %>%
+  mutate(totalPursuit = pursuit + modify,
+         totalPursuit_perc = (pursuit + modify) / totalGoal)
+
+# summarize by goal type
+statusSum_F1_type <- subSummaryDf_l %>%
+  group_by(goalType) %>%
+  summarise(pursuit = sum(F1_status == 1, na.rm = T), 
+            complete = sum(F1_status == 2, na.rm = T),
+            abandon = sum(F1_status == 3, na.rm = T),
+            modify = sum(F1_status == 4, na.rm = T)) %>%
+  mutate(totalGoal = pursuit + complete + abandon + modify,
+         totalPursuit = pursuit + modify,
+         totalPursuit_perc = (pursuit + modify) /totalGoal)
+
+write.csv(statusSum_F1, here("TimeSeries", "Outputs", "statusSum_F1_050521.csv"), row.names = F)
+write.csv(statusSum_F1_type, here("TimeSeries", "Outputs", "statusSum_F1_type_050521.csv"), row.names = F)
+```
+
