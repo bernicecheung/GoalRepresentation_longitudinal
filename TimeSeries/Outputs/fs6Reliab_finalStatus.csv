@@ -1,0 +1,31 @@
+"factor","term","estimate","std.error","statistic","p.value","conf.low","conf.high","rsq"
+"Value","baseline rating",0.747,0.091,8.191,0,0.568,0.926,0.577
+"Value","completed",0.365,0.576,0.634,0.526,-0.766,1.496,0.577
+"Value","continued",0.318,0.522,0.608,0.543,-0.708,1.343,0.577
+"Value","baseline rating:completed",-0.006,0.106,-0.059,0.953,-0.215,0.202,0.577
+"Value","baseline rating:continued",0.003,0.097,0.033,0.974,-0.188,0.195,0.577
+"External","baseline rating",0.769,0.088,8.731,0,0.596,0.942,0.521
+"External","completed",-0.081,0.401,-0.202,0.84,-0.869,0.707,0.521
+"External","continued",0.333,0.348,0.957,0.339,-0.35,1.015,0.521
+"External","baseline rating:completed",0.063,0.104,0.609,0.543,-0.141,0.267,0.521
+"External","baseline rating:continued",-0.082,0.096,-0.858,0.391,-0.27,0.106,0.521
+"Attainability","baseline rating",0.35,0.088,3.966,0,0.176,0.523,0.678
+"Attainability","completed",1.608,0.45,3.57,0,0.723,2.493,0.678
+"Attainability","continued",0.488,0.339,1.441,0.15,-0.177,1.153,0.678
+"Attainability","baseline rating:completed",-0.108,0.118,-0.916,0.36,-0.339,0.123,0.678
+"Attainability","baseline rating:continued",0.14,0.097,1.436,0.152,-0.051,0.33,0.678
+"Consensus","baseline rating",0.866,0.065,13.375,0,0.739,0.993,0.653
+"Consensus","completed",0.429,0.28,1.535,0.125,-0.12,0.978,0.653
+"Consensus","continued",0.553,0.251,2.207,0.028,0.061,1.046,0.653
+"Consensus","baseline rating:completed",-0.111,0.079,-1.404,0.161,-0.265,0.044,0.653
+"Consensus","baseline rating:continued",-0.123,0.071,-1.73,0.084,-0.263,0.017,0.653
+"Measurability","baseline rating",0.567,0.086,6.615,0,0.399,0.736,0.407
+"Measurability","completed",0.123,0.735,0.167,0.867,-1.321,1.566,0.407
+"Measurability","continued",-0.371,0.565,-0.657,0.511,-1.48,0.738,0.407
+"Measurability","baseline rating:completed",0.019,0.118,0.159,0.874,-0.213,0.251,0.407
+"Measurability","baseline rating:continued",0.04,0.094,0.421,0.674,-0.145,0.224,0.407
+"Instrumentality","baseline rating",0.632,0.084,7.554,0,0.468,0.797,0.47
+"Instrumentality","completed",0.344,0.514,0.669,0.504,-0.666,1.354,0.47
+"Instrumentality","continued",-0.017,0.46,-0.037,0.971,-0.921,0.887,0.47
+"Instrumentality","baseline rating:completed",-0.029,0.101,-0.289,0.772,-0.228,0.169,0.47
+"Instrumentality","baseline rating:continued",0.05,0.092,0.544,0.587,-0.13,0.23,0.47

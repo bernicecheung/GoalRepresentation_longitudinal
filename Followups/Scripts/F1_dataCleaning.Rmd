@@ -25,7 +25,7 @@ library(here)
 
 ```{r load data}
 # load raw data
-rawDf <- read.csv(here("Raw_data", "Goal Longitudinal_F1_April 28, 2021_18.07.csv"), stringsAsFactors = F)
+rawDf <- read.csv(here("Raw_data", "Goal Longitudinal_F1_May 5, 2021_13.45.csv"), stringsAsFactors = F)
 ```
 
 
@@ -35,10 +35,10 @@ Organize the raw dataframe
 rawDf_cleaned <- rawDf[-c(1,2),]
 
 # write the data without the 2 rows
-write.csv(rawDf_cleaned, here("Baseline", "Inputs", "raw_clean.csv"), row.names = F)
+write.csv(rawDf_cleaned, here("Followups", "Inputs", "raw_F1_clean.csv"), row.names = F)
 
 # reload the raw cleaned dataframe
-rawDf_cleaned <- read.csv(here("Baseline", "Inputs", "raw_clean.csv"),stringsAsFactors = F)
+rawDf_cleaned <- read.csv(here("Followups", "Inputs", "raw_F1_clean.csv"),stringsAsFactors = F)
 ```
 
 check duration

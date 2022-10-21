@@ -21,11 +21,11 @@ library(ggplot2)
 library(stringr)
 library(knitr)
 library(lme4)
-library(nFactors)
 library(corrplot)
 library(janitor)
 library(kableExtra)
 library(here)
+library(papaja)
 ```
 
 Raw data was directly downloaded from Qualtric on 03/24/21. A filter that only includes participants who met the inclusion criteria, consented and completed the survey was applied prior to downloading it. 251 participants are included in this raw dataset. 
@@ -110,9 +110,6 @@ goalRating <- rawDf_cleaned %>%
          -starts_with("GAT"))
 
 goalRating <- bind_cols(goalRating, rawDf_cleaned[,c("MTurkCode","listNum", "total_goal")])
-  
-# this step is to address to duplicated question of G30 for goal 3, 4, and 5
-goalRating[, c("G30_3", "G30_4", "G30_5")] <- NA
 
 
 # transform the dataset to long format
@@ -134,8 +131,22 @@ for (idx in 1: nrow(nameDf)){
   goalRating_long$variable[grepl(nameDf$question_number[idx],goalRating_long$variable)] <- as.character(nameDf$variable_name[idx])
 }
 
+
 # get rid off the NAs for questions corresponding to goals that the subjects didn't list 
 goalRating_long <- goalRating_long[goalRating_long$goal <= goalRating_long$listNum,]
+
+# combine with goal type data
+goalTypeDf_l <- rawDf_cleaned %>%
+  select(MTurkCode, starts_with("goalType")) %>%
+  mutate(across(c(goalType_1: goalType_5), ~ recode(.x, `1` = "short-term",
+                                               `2` = "long-term",
+                                               `3` = "recurrance"))) %>%
+  gather(goalType_1: goalType_5, key = "goal", value = "goalType") %>%
+  rowwise() %>%
+  mutate(goal = str_sub(goal, 10,10)) 
+  
+goalRating_long <- goalRating_long %>%
+  left_join(goalTypeDf_l, by = c("MTurkCode", "goal"))
 ```
 
 # Exclude participants
@@ -262,7 +273,7 @@ candidateDf %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
 ```
 
-clean datasets
+clean datasets:  246 participants passed the baseline screening and were invited to all follow-up surveys
 ```{r}
 # exclude subject from both the wide and long format datasets 
 cleanedDf <- rawDf_cleaned[! rawDf_cleaned$MTurkCode %in% id_candidate,]
@@ -798,6 +809,236 @@ demoDf <- cleanedDf %>%
 #indivDiffDf <- indivDiffDf %>% left_join(demoDf, by = "MTurkCode")
 ```
 
+# Goal progress
+
+Extract progress related variables
+```{r}
+progressDf <- cleanedDf %>%
+  select(starts_with("PA"), starts_with("PB"), starts_with("PC"), MTurkCode, listNum, starts_with("goalType")) %>%
+  select(-starts_with("PB2")) %>% # PB2 asks about the progress set for the long-term goals
+  rename(PA1_1 = PA1_1_1, PA1_2 = PA1_2_1, PA1_3 = PA1_3_1, PA1_4 = PA1_4_1, PA1_5 = PA1_5_1, PB1_1 = PB1_1_1, PB1_2 = PB1_2_1, PB1_3 = PB1_3_1, PB1_4 = PB1_4_1, PB1_5 = PB1_5_1, PC1_1 = PC1_1_1, PC1_2 = PC1_2_1, PC1_3 = PC1_3_1, PC1_4 = PC1_4_1, PC1_5 = PC1_5_1) %>% # correct typos in variable names
+  rowwise() %>%
+  mutate(progress_base_1 = case_when( # extract progress and satisfaction data based on goal types 
+    goalType_1 == 1 ~ PA1_1,
+    goalType_1 == 2 ~ PB1_1,
+    goalType_1 == 3 ~ PC1_1),
+    progress_base_2 = case_when(
+    goalType_2 == 1 ~ PA1_2,
+    goalType_2 == 2 ~ PB1_2,
+    goalType_2 == 3 ~ PC1_2),
+    progress_base_3 = case_when(
+    goalType_3 == 1 ~ PA1_3,
+    goalType_3 == 2 ~ PB1_3,
+    goalType_3 == 3 ~ PC1_3),
+    progress_base_4 = case_when(
+    goalType_4 == 1 ~ PA1_4,
+    goalType_4 == 2 ~ PB1_4,
+    goalType_4 == 3 ~ PC1_4),
+    progress_base_5 = case_when(
+    goalType_5 == 1 ~ PA1_5,
+    goalType_5 == 2 ~ PB1_5,
+    goalType_5 == 3 ~ PC1_5),
+    satisfaction_base_1 = case_when(
+    goalType_1 == 1 ~ PA3_1,
+    goalType_1 == 2 ~ PB3_1,
+    goalType_1 == 3 ~ PC3_1),
+    satisfaction_base_2 = case_when(
+    goalType_2 == 1 ~ PA3_2,
+    goalType_2 == 2 ~ PB3_2,
+    goalType_2 == 3 ~ PC3_2),
+    satisfaction_base_3 = case_when(
+    goalType_3 == 1 ~ PA3_3,
+    goalType_3 == 2 ~ PB3_3,
+    goalType_3 == 3 ~ PC3_3),
+    satisfaction_base_4 = case_when(
+    goalType_4 == 1 ~ PA3_4,
+    goalType_4 == 2 ~ PB3_4,
+    goalType_4 == 3 ~ PC3_4),
+    satisfaction_base_5 = case_when(
+    goalType_5 == 1 ~ PA3_5,
+    goalType_5 == 2 ~ PB3_5,
+    goalType_5 == 3 ~ PC3_5)) %>%
+  rename(endTime_1 = PA2_1, endTime_2 = PA2_2 ,endTime_3 = PA2_3,endTime_4 = PA2_4,endTime_5 = PA2_5) %>%
+  mutate(across(starts_with("endTime"), ~ recode(.x, `1` = "in_days", `2` = "in_weeks", `3` = "next_month", `4` = "two_month", `5` = "three_month"))) %>% # recode endTime 
+  mutate(across(c(goalType_1: goalType_5), ~ recode(.x, `1` = "short-term", # recode goal type
+                                               `2` = "long-term",
+                                               `3` = "recurrance"))) %>%
+  select(-starts_with("PA"), -starts_with("PB"), -starts_with("PC"))
+  
+# transform into a long-format
+progressDf_l <- progressDf %>%
+  gather(variable, rating, c(endTime_1:endTime_5, goalType_1: satisfaction_base_5)) %>%
+  rowwise() %>%
+  mutate(goal = case_when(
+    str_detect(variable, "endTime") ~ str_split_fixed(variable, "_", n = 4)[2],
+    str_detect(variable, "goalType") ~ str_split_fixed(variable, "_", n = 4)[2],
+    TRUE ~ str_split_fixed(variable, "_", n = 4)[3]
+  )) %>%
+  mutate(variable = str_sub(variable, 1, -3)) %>%
+  filter(goal <= listNum)
+
+progressDf_w <- progressDf_l %>%
+  spread(variable, rating)
+
+progressDf_l <- progressDf_w %>%
+  gather(endTime, progress_base, satisfaction_base, key = "variable", value = "rating")
+```
+
+# merge the striving ratings with the progress
+```{r}
+striveDf_l <- goalRating_long_Clean %>%
+  filter(variable %in% progressName) 
+
+striveDf_w <- striveDf_l %>%
+  spread(variable, rating)
+```
+
+# inter-goal relationships
+
+Relationship measures: 
+_1: how much does working on A improve your chances of achieving your goal B?
+_2: how much does working on A recude your chances of achieving your goal B?
+
+## Goal level: 
+compose relation scores
+```{r}
+# extract relevant columns
+relationDf <- cleanedDf %>%
+  select(MTurkCode, listNum, contains(c("P1", "P2", "P3","P4","P5"))) %>%
+  rename(P51_1 = P51_2.1)# correct the duplicated column name
+
+relation_scoreDf <- relationDf %>%
+  mutate(total_fac = rowMeans(select(relationDf, ends_with("_1")), na.rm = T), # Subject level average facilitation and conflict
+         total_con = rowMeans(select(relationDf, ends_with("_2")), na.rm = T)) %>%
+  rowwise() %>%
+  mutate(g1_out_fac_m = mean(c(P12_1,P13_1,P14_1, P15_1), na.rm = T), #the average facilitation effects of the present goal to other goals
+         g1_out_fac_sd = sd(c(P12_1,P13_1,P14_1, P15_1), na.rm = T), 
+         g1_out_con_m = mean(c(P12_2,P13_2,P14_2, P15_2), na.rm = T), # the average facilitation effects of other goals to the present goal
+         g1_out_con_sd = sd(c(P12_2,P13_2,P14_2, P15_2), na.rm = T),
+         g1_in_fac_m = mean(c(P21_1,P31_1,P41_1, P51_1), na.rm = T),
+         g1_in_fac_sd = sd(c(P21_1,P31_1,P41_1, P51_1),na.rm = T),
+         g1_in_con_m = mean(c(P21_2,P31_2,P41_2, P51_2), na.rm = T),
+         g1_in_con_sd = sd(c(P21_2,P31_2,P41_2, P51_2), na.rm = T),
+         
+         g2_out_fac_m = mean(c(P21_1,P23_1,P24_1, P25_1), na.rm = T),
+         g2_out_fac_sd = sd(c(P21_1,P23_1,P24_1, P25_1), na.rm = T),
+         g2_out_con_m = mean(c(P21_2,P23_2,P24_2, P25_2), na.rm = T),
+         g2_out_con_sd = sd(c(P21_2,P23_2,P24_2, P25_2), na.rm = T),
+         g2_in_fac_m = mean(c(P12_1,P32_1,P42_1, P52_1), na.rm = T),
+         g2_in_fac_sd = sd(c(P12_1,P32_1,P42_1, P52_1), na.rm = T),
+         g2_in_con_m = mean(c(P12_2,P32_2,P42_2, P52_2), na.rm = T),
+         g2_in_con_sd = sd(c(P12_2,P32_2,P42_2, P52_2), na.rm = T),
+         
+         g3_out_fac_m = mean(c(P31_1,P32_1,P34_1, P35_1), na.rm = T),
+         g3_out_fac_sd = sd(c(P31_1,P32_1,P34_1, P35_1), na.rm = T),
+         g3_out_con_m = mean(c(P31_2,P32_2,P34_2, P35_2), na.rm = T),
+         g3_out_con_sd = sd(c(P31_2,P32_2,P34_2, P35_2), na.rm = T),
+         g3_in_fac_m = mean(c(P13_1,P23_1,P43_1, P53_1), na.rm = T),
+         g3_in_fac_sd = sd(c(P13_1,P23_1,P43_1, P53_1), na.rm = T),
+         g3_in_con_m = mean(c(P13_2,P23_2,P43_2, P53_2), na.rm = T),
+         g3_in_con_sd = sd(c(P13_2,P23_2,P43_2, P53_2), na.rm = T),
+         
+         g4_out_fac_m = mean(c(P41_1,P42_1,P43_1, P45_1), na.rm = T),
+         g4_out_fac_sd = sd(c(P41_1,P42_1,P43_1, P45_1), na.rm = T),
+         g4_out_con_m = mean(c(P41_2,P42_2,P43_2, P45_2), na.rm = T),
+         g4_out_con_sd = sd(c(P41_2,P42_2,P43_2, P45_2), na.rm = T),
+         g4_in_fac_m = mean(c(P14_1,P24_1,P34_1, P54_1), na.rm = T),
+         g4_in_fac_sd = sd(c(P14_1,P24_1,P34_1, P54_1), na.rm = T),
+         g4_in_con_m = mean(c(P14_2,P24_2,P34_2, P54_2), na.rm = T),
+         g4_in_con_sd = sd(c(P14_2,P24_2,P34_2, P54_2), na.rm = T),
+         
+         g5_out_fac_m = mean(c(P51_1,P52_1,P53_1, P54_1), na.rm = T),
+         g5_out_fac_sd = sd(c(P51_1,P52_1,P53_1, P54_1), na.rm = T),
+         g5_out_con_m = mean(c(P51_2,P52_2,P53_2, P54_2), na.rm = T),
+         g5_out_con_sd = sd(c(P51_2,P52_2,P53_2, P54_2), na.rm = T),
+         g5_in_fac_m = mean(c(P15_1,P25_1,P35_1, P45_1), na.rm = T),
+         g5_in_fac_sd = sd(c(P15_1,P25_1,P35_1, P45_1), na.rm = T),
+         g5_in_con_m = mean(c(P15_2,P25_2,P35_2, P45_2), na.rm = T),
+         g5_in_con_sd = sd(c(P15_2,P25_2,P35_2, P45_2), na.rm = T)) %>%
+  
+  mutate(g1_out_net = g1_out_fac_m - g1_out_con_m, # The net relationship (facilitation - conflict) for each goal
+         g1_in_net = g1_in_fac_m - g1_in_con_m,
+         g2_out_net = g2_out_fac_m - g2_out_con_m,
+         g2_in_net = g2_in_fac_m - g2_in_con_m,
+         g3_out_net = g3_out_fac_m - g3_out_con_m,
+         g3_in_net = g3_in_fac_m - g3_in_con_m,
+         g4_out_net = g4_out_fac_m - g4_out_con_m,
+         g4_in_net = g4_in_fac_m - g4_in_con_m,
+         g5_out_net = g5_out_fac_m - g5_out_con_m,
+         g5_in_net = g5_in_fac_m - g5_in_con_m) %>%
+  printnum()
+```
+
+organize goal level relation items
+```{r}
+relation_goalDf <- relation_scoreDf %>%
+  pivot_longer(
+    cols = contains("g"),
+    names_to = c("goal", "relation_type"),
+    values_to = "score",
+    names_pattern = "(.)_(.*)"
+  ) %>%
+  pivot_wider(
+    names_from = relation_type,
+    values_from = score
+  ) %>%
+  filter(listNum >= goal) %>%
+  select(-contains("P"), -listNum) %>%
+  mutate(goal = as.numeric(goal))
+```
+
+organize priority rank data
+```{r}
+# extract relevant ratings
+priorityDf <- cleanedDf[,nchar(colnames(cleanedDf)) == 4] %>% select(contains("R")) %>%
+  select(-race) %>%
+  select(-contains("RSE"))
+
+priorityDf$MTurkCode <- cleanedDf$MTurkCode
+priorityDf$listNum <- cleanedDf$listNum
+
+# transform to long format
+priorityDf_long <- priorityDf %>% gather(variable, priority, R2_1:R5_5)
+
+# label goal order
+priorityDf_long <- priorityDf_long %>%
+  mutate(goal = as.numeric(str_sub(variable, -1,-1)))
+
+# eliminate subjects with only one goal
+priorityDf_long_clean <- priorityDf_long %>% filter(listNum != 1)
+
+# only include cases in the corresponding session
+priorityDf_long_clean <- priorityDf_long_clean %>%
+  mutate(session = as.numeric(str_sub(variable, -3,-3))) %>%
+  filter(listNum == session) %>%
+  select(-variable, -session)
+```
+
+extract relevant goal representation ratings
+```{r}
+goalRep_inter_goalDf <- goalRating_long_R %>%
+  filter(variable %in% c("connectedness", "instrumentality", "conflict")) %>%
+  spread(variable, rating) %>%
+  mutate(goal = as.numeric(goal)) %>%
+  select(-listNum)
+```
+
+combine all goal level data 
+```{r}
+relation_goalDf_combine <- relation_goalDf %>%
+  left_join(priorityDf_long_clean, by = c("MTurkCode", "goal")) %>%
+  left_join(goalRep_inter_goalDf, by = c("MTurkCode", "goal")) %>%
+  mutate(across(total_fac :in_net, ~ as.numeric(.x) ))
+```
+
+## subject level mean value
+```{r}
+relation_subDf <- relation_goalDf_combine %>%
+  group_by(MTurkCode) %>%
+  summarise(across(c(total_fac:in_net, conflict:instrumentality), ~ mean(.x, na.rm = TRUE))) %>%
+  printnum()
+```
+
 # write cleaned datasets
 
 ```{r}
@@ -824,4 +1065,13 @@ goal_list <- list_df %>%
   filter(goals != "")
 
 write.csv(goal_list,here("Baseline", "Outputs", "listedGoals.csv"), row.names = F)
+
+write.csv(progressDf_l, here("Baseline", "Outputs", "progress_base_l.csv"), row.names = F)
+write.csv(progressDf_w, here("Baseline", "Outputs", "progress_base_w.csv"), row.names = F)
+write.csv(striveDf_l, here("Baseline", "Outputs", "strive_base_l.csv"), row.names = F)
+write.csv(striveDf_w, here("Baseline", "Outputs", "strive_base_w.csv"), row.names = F)
+
+# write the inter-goal relation dataframes
+write.csv(relation_goalDf_combine, here("Baseline", "Outputs", "relation_goalDf.csv"), row.names = F)
+write.csv(relation_subDf, here("Baseline", "Outputs", "relation_subDf.csv"), row.names = F)
 ```

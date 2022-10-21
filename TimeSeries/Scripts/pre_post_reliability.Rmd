@@ -1,0 +1,692 @@
+---
+title: "pre_post_analysis"
+author: "Bernice Cheung"
+date: "7/14/2021"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, echo=FALSE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(psych)
+library(janitor)
+library(kableExtra)
+library(here)
+library(ppcor)
+library(broom)
+```
+
+Import all data
+```{r}
+# load baseline goal representation rating
+baselineRating_w <- read.csv(here("Baseline", "Outputs", "baseline_goalRap.csv"))
+
+# load baseline factor score datasets 
+baseline_fs_4 <- read.csv(here("Baseline", "Outputs", "factorScoreDf_4f.csv"))
+baseline_fs_6 <- read.csv(here("Baseline", "Outputs", "factorScoreDf_6f.csv"))
+
+# load post-rating dataset
+postRating_w <- read.csv(here("TimeSeries", "Inputs", "merged_goalRep_post_w.csv"))
+
+# load goal progress dataset
+progress_df <- read.csv(here("TimeSeries", "Inputs", "merged_progress_w_no_adj.csv"))
+```
+
+
+Compute post-rating unweighted factor score (same variables for each factor as the baseline)
+```{r}
+# 4-factor scores
+post_fs_4 <- postRating_w %>%
+  rowwise() %>%
+  mutate(Value = (attractiveness_achievement + attractiveness_progress + ideal_motivation + importance + construal_level + identified_motivation + meaningfulness + instrumentality + difficulty + connectedness) / 10,
+         Clarity = (clarity + attainability + measurability + affordance + specificity - conflict + control) / 7,
+         External = (ought_motivation + external_motivation + external_importance + introjected_motivation + visibility) / 5,
+         Consensus = (-intrinsic_motivation + commonality + basic_needs + social_desirability) / 4) %>%
+  dplyr::select(MTurkCode, goal, post_timePoint = time_point, Value, Clarity, External, Consensus)
+
+# 6-factor scores
+post_fs_6 <- postRating_w %>%
+  rowwise() %>%
+  mutate(Value = (attractiveness_achievement + attractiveness_progress  + importance + construal_level + identified_motivation + ideal_motivation + meaningfulness) / 7,
+         External = (ought_motivation + external_motivation + introjected_motivation + external_importance + conflict + visibility) / 6,
+         Attainability = (attainability - difficulty + clarity + affordance) /4,
+         Consensus = (commonality + basic_needs + social_desirability - intrinsic_motivation) / 4,
+         Measurability = (specificity + measurability) / 2,
+         Instrumentality = (connectedness + instrumentality + control) / 3) %>%
+  dplyr::select(MTurkCode, goal, post_timePoint = time_point, Value, External, Attainability, Consensus, Measurability, Instrumentality)
+```
+
+merge and write factor scores
+```{r}
+merged_fs <- baseline_fs_4 %>%
+  rename_with(function(x) paste0(x, "_4"),Value:Consensus) %>%
+  left_join(rename_with(post_fs_4,function(x) paste0(x, "_4_post"),Value:Consensus), by =c("MTurkCode", "goal")) %>%
+  left_join(rename_with(dplyr::select(baseline_fs_6, -goalType),function(x) paste0(x, "_6"),Value:Instrumentality), by =c("MTurkCode", "goal")) %>%
+  left_join(rename_with(dplyr::select(post_fs_6, -post_timePoint),function(x) paste0(x, "_6_post"),Value:Instrumentality), by =c("MTurkCode", "goal"))
+
+#write.csv(merged_fs, here("TimeSeries","Outputs", "merged_fs.csv"), row.names = F)
+```
+
+
+Variable level reliability
+```{r}
+# add suffix to the post-rating dataframe
+colnames(postRating_w)[7:37] <- paste0(colnames(postRating_w[7:37]), "_post")
+
+# merge the variable ratings
+merged_varRating <- progress_df %>%
+  dplyr::select(MTurkCode, goal, total_goal, endTime, goalType, progress_base, satisfaction_base, progress_final, satisfaction_final, status_final) %>%
+  left_join(dplyr::select(baselineRating_w, -listNum, -total_goal, -goalType), by = c("MTurkCode", "goal")) %>%
+  left_join(dplyr::select(postRating_w, -listNum), by = c("MTurkCode", "goal"))
+  
+
+# set the variables included in the analysis
+variableName <- c("construal_level",  "specificity", "measurability", "importance", "meaningfulness", "instrumentality", "connectedness", "attractiveness_achievement", "attractiveness_progress", "social_desirability", "difficulty", "affordance", "attainability", "clarity", "control", "external_motivation", "introjected_motivation", "identified_motivation", "intrinsic_motivation", "ought_motivation", "ideal_motivation", "basic_needs", "commonality", "visibility", "external_importance", "conflict")
+
+# generate pairwise Pearson's correlations across all 26 variables 
+var_prepost_corr<- vector()
+var_prepost_pcorr <- vector()
+
+
+for (var in variableName) {
+  varCorr <- cor(merged_varRating[[var]], merged_varRating[[paste0(var, "_post")]], use = "pairwise.complete.obs")
+  varCorr_partial <- partial.r(data=merged_varRating, x=c(var,paste0(var, "_post")), y=c("progress_final", "satisfaction_final"), use="pairwise",method="pearson")[1,2]
+  var_prepost_corr <- c(var_prepost_corr, varCorr)
+  var_prepost_pcorr <- c(var_prepost_pcorr, varCorr_partial)
+}
+
+varReliab_df <- data.frame(variable = variableName,
+                           corr = var_prepost_corr,
+                           pcorr = var_prepost_pcorr)
+```
+
+factor-level reliability： both pre-post correlation and partial correlation controlling for 
+
+```{r}
+# add suffix to the post factor scores
+colnames(post_fs_4)[4:7] <- paste0(colnames(post_fs_4[4:7]), "_post")
+colnames(post_fs_6)[4:9] <- paste0(colnames(post_fs_6[4:9]), "_post")
+
+# merge 4-factor scores
+merged_fs_4 <- progress_df %>%
+  dplyr::select(MTurkCode, goal, total_goal, progress_base, satisfaction_base, progress_final, satisfaction_final, status_final) %>%
+  left_join(baseline_fs_4, by = c("MTurkCode", "goal")) %>%
+  left_join(post_fs_4, by = c("MTurkCode", "goal"))
+
+# generate pairwise Pearson's correlations across all 4 factor scores
+fs4_prepost_corr <- vector()
+fs4_prepost_pcorr <- vector()
+
+fs4Name <- colnames(baseline_fs_4)[4:7]
+
+for (factor in fs4Name){
+  factorCorr <- cor(merged_fs_4[[factor]], merged_fs_4[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  factorCorr_partial <- partial.r(data=merged_fs_4, x=c(factor,paste0(factor, "_post")), y=c("progress_final", "satisfaction_final"), use="pairwise",method="pearson")[1,2]
+  #factorCorr_partial <- partial.r(data=merged_fs_4, x=c(factor,paste0(factor, "_post")), y="progress_final", use="pairwise",method="pearson")[1,2]
+  fs4_prepost_corr <- c(fs4_prepost_corr, factorCorr)
+  fs4_prepost_pcorr <- c(fs4_prepost_pcorr, factorCorr_partial)
+}
+
+fs4Reliab_df <- data.frame(factor = fs4Name,
+                           corr = fs4_prepost_corr,
+                           pcorr = fs4_prepost_pcorr)
+
+# merge 6-factor scores
+merged_fs_6 <- progress_df %>%
+  dplyr::select(MTurkCode, goal, total_goal, progress_base, satisfaction_base, progress_final, satisfaction_final, status_final) %>%
+  left_join(baseline_fs_6, by = c("MTurkCode", "goal")) %>%
+  left_join(post_fs_6, by = c("MTurkCode", "goal"))
+
+# generate pairwise Pearson's correlations across all 4 factor scores
+fs6_prepost_corr <- vector()
+fs6_prepost_pcorr <- vector()
+
+fs6Name <- colnames(baseline_fs_6)[4:9]
+
+for (factor in fs6Name){
+  factorCorr <- cor(merged_fs_6[[factor]], merged_fs_6[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  factorCorr_partial <- partial.r(data=merged_fs_6, x=c(factor,paste0(factor, "_post")), y=c("progress_final", "satisfaction_final"), use="pairwise",method="pearson")[1,2]
+  fs6_prepost_corr <- c(fs6_prepost_corr, factorCorr)
+  fs6_prepost_pcorr <- c(fs6_prepost_pcorr, factorCorr_partial)
+}
+
+fs6Reliab_df <- data.frame(factor = fs6Name,
+                           corr = fs6_prepost_corr,
+                           pcorr = fs6_prepost_pcorr)
+```
+
+group reliability based on time:  
+
+goal number: F1: 73; F2: 77 F3: 606
+```{r}
+# subset variable rating datasets based on timepoint 
+merged_varRating_F1 <- merged_varRating %>% filter(time_point == "F1")
+merged_varRating_F2 <- merged_varRating %>% filter(time_point == "F2")
+merged_varRating_F3 <- merged_varRating %>% filter(time_point == "F3")
+
+# generate pair-wise variable correlations for each timepoint
+
+var_prepost_corr_f1<- vector()
+var_prepost_pcorr_f1 <- vector()
+
+ct = 1
+for (var in variableName) {
+  varCorr <- cor(merged_varRating_F1[[var]], merged_varRating_F1[[paste0(var, "_post")]], use = "pairwise.complete.obs")
+  varCorr_partial <- partial.r(data=merged_varRating_F1, x=c(var,paste0(var, "_post")), y=c("progress_final", "satisfaction_final"), use="pairwise",method="pearson")[1,2]
+  var_prepost_corr_f1 <- c(var_prepost_corr_f1, varCorr)
+  var_prepost_pcorr_f1 <- c(var_prepost_pcorr_f1, varCorr_partial)
+
+}
+
+var_prepost_corr_f2<- vector()
+var_prepost_pcorr_f2 <- vector()
+
+
+for (var in variableName) {
+  varCorr <- cor(merged_varRating_F2[[var]], merged_varRating_F2[[paste0(var, "_post")]], use = "pairwise.complete.obs")
+  varCorr_partial <- partial.r(data=merged_varRating_F2, x=c(var,paste0(var, "_post")), y=c("progress_final", "satisfaction_final"), use="pairwise",method="pearson")[1,2]
+  var_prepost_corr_f2 <- c(var_prepost_corr_f2, varCorr)
+  var_prepost_pcorr_f2 <- c(var_prepost_pcorr_f2, varCorr_partial)
+}
+
+var_prepost_corr_f3<- vector()
+var_prepost_pcorr_f3 <- vector()
+
+
+for (var in variableName) {
+  varCorr <- cor(merged_varRating_F1[[var]], merged_varRating_F1[[paste0(var, "_post")]], use = "pairwise.complete.obs")
+  varCorr_partial <- partial.r(data=merged_varRating_F1, x=c(var,paste0(var, "_post")), y=c("progress_final", "satisfaction_final"), use="pairwise",method="pearson")[1,2]
+  var_prepost_corr_f3 <- c(var_prepost_corr_f3, varCorr)
+  var_prepost_pcorr_f3 <- c(var_prepost_pcorr_f3, varCorr_partial)
+}
+
+# varReliab_df$F1 <- varReliability_F1
+# varReliab_df$F2 <- varReliability_F2
+# varReliab_df$F3 <- varReliability_F3
+
+varReliab_df$F1 <- var_prepost_pcorr_f1
+varReliab_df$F2 <- var_prepost_pcorr_f2
+varReliab_df$F3 <- var_prepost_pcorr_f3
+```
+
+factor scores: 
+```{r}
+# add time point and status to the factor dataset
+merged_fs_4 <- merged_fs_4 %>%
+  left_join(dplyr ::select(postRating_w, MTurkCode, goal, status, time_point), by = c("MTurkCode", "goal"))
+
+merged_fs_6 <- merged_fs_6 %>%
+  left_join(dplyr ::select(postRating_w, MTurkCode, goal, status, time_point), by = c("MTurkCode", "goal"))
+
+# subset factor score datasets based on timepoint
+merged_fs_4_F1 <- merged_fs_4 %>% filter(time_point == "F1")
+merged_fs_4_F2 <- merged_fs_4 %>% filter(time_point == "F2")
+merged_fs_4_F3 <- merged_fs_4 %>% filter(time_point == "F3")
+merged_fs_6_F1 <- merged_fs_6 %>% filter(time_point == "F1")
+merged_fs_6_F2 <- merged_fs_6 %>% filter(time_point == "F2")
+merged_fs_6_F3 <- merged_fs_6 %>% filter(time_point == "F3")
+
+# generate pair-wise variable correlations for each timepoint
+fs4Reliability_F1 <- vector()
+
+for (factor in fs4Name){
+  factorCorr <- cor(merged_fs_4_F1[[factor]], merged_fs_4_F1[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs4Reliability_F1 <- c(fs4Reliability_F1, factorCorr)
+}
+
+fs4Reliability_F2 <- vector()
+
+for (factor in fs4Name){
+  factorCorr <- cor(merged_fs_4_F2[[factor]], merged_fs_4_F2[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs4Reliability_F2 <- c(fs4Reliability_F2, factorCorr)
+}
+
+fs4Reliability_F3 <- vector()
+
+for (factor in fs4Name){
+  factorCorr <- cor(merged_fs_4_F3[[factor]], merged_fs_4_F3[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs4Reliability_F3 <- c(fs4Reliability_F3, factorCorr)
+}
+
+fs4Reliab_df$F1 <- fs4Reliability_F1
+fs4Reliab_df$F2 <- fs4Reliability_F2
+fs4Reliab_df$F3 <- fs4Reliability_F3
+
+# 6-factor
+fs6Reliability_F1 <- vector()
+
+for (factor in fs6Name){
+  factorCorr <- cor(merged_fs_6_F1[[factor]], merged_fs_6_F1[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs6Reliability_F1 <- c(fs6Reliability_F1, factorCorr)
+}
+
+fs6Reliability_F2 <- vector()
+
+for (factor in fs6Name){
+  factorCorr <- cor(merged_fs_6_F2[[factor]], merged_fs_6_F2[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs6Reliability_F2 <- c(fs6Reliability_F2, factorCorr)
+}
+
+fs6Reliability_F3 <- vector()
+
+for (factor in fs6Name){
+  factorCorr <- cor(merged_fs_6_F3[[factor]], merged_fs_6_F3[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs6Reliability_F3 <- c(fs6Reliability_F3, factorCorr)
+}
+
+fs6Reliab_df$F1 <- fs6Reliability_F1
+fs6Reliab_df$F2 <- fs6Reliability_F2
+fs6Reliab_df$F3 <- fs6Reliability_F3
+
+#write.csv(merged_fs_6, here("TimeSeries","Outputs", "merged_fs_6.csv"), row.names =FALSE)
+```
+
+
+
+short-term: 258; long-term: 210; recurrance: 377
+```{r}
+# subset variable rating datasets based on timepoint 
+merged_varRating_short <- merged_varRating %>% filter(goalType == "short-term")
+merged_varRating_long <- merged_varRating %>% filter(goalType == "long-term")
+merged_varRating_re <- merged_varRating %>% filter(goalType == "recurrance")
+
+# generate pair-wise variable correlations for each timepoint
+varReliability_short <- vector()
+
+for (var in variableName) {
+  varCorr <- cor(merged_varRating_short[[var]], merged_varRating_short[[paste0(var, "_post")]], use = "pairwise.complete.obs")
+  varReliability_short <- c(varReliability_short, varCorr)
+}
+
+varReliability_long <- vector()
+
+for (var in variableName) {
+  varCorr <- cor(merged_varRating_long[[var]], merged_varRating_long[[paste0(var, "_post")]], use = "pairwise.complete.obs")
+  varReliability_long <- c(varReliability_long, varCorr)
+}
+
+varReliability_re <- vector()
+
+for (var in variableName) {
+  varCorr <- cor(merged_varRating_re[[var]], merged_varRating_re[[paste0(var, "_post")]], use = "pairwise.complete.obs")
+  varReliability_re <- c(varReliability_re, varCorr)
+}
+
+varReliab_df$short_term <- varReliability_short
+varReliab_df$long_term <- varReliability_long
+varReliab_df$recurrance <- varReliability_re
+```
+
+```{r}
+# subset factor score datasets based on timepoint
+merged_fs_4_short <- merged_fs_4 %>% filter(goalType == "short-term")
+merged_fs_4_long <- merged_fs_4 %>% filter(goalType == "long-term")
+merged_fs_4_re <- merged_fs_4 %>% filter(goalType == "recurrance")
+merged_fs_6_short <- merged_fs_6 %>% filter(goalType == "short-term")
+merged_fs_6_long <- merged_fs_6 %>% filter(goalType == "long-term")
+merged_fs_6_re <- merged_fs_6 %>% filter(goalType == "recurrance")
+
+# generate pair-wise variable correlations for each timepoint
+fs4Reliability_short <- vector()
+
+for (factor in fs4Name){
+  factorCorr <- cor(merged_fs_4_short[[factor]], merged_fs_4_short[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs4Reliability_short <- c(fs4Reliability_short, factorCorr)
+}
+
+fs4Reliability_long <- vector()
+
+for (factor in fs4Name){
+  factorCorr <- cor(merged_fs_4_long[[factor]], merged_fs_4_long[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs4Reliability_long <- c(fs4Reliability_long, factorCorr)
+}
+
+fs4Reliability_re <- vector()
+
+for (factor in fs4Name){
+  factorCorr <- cor(merged_fs_4_re[[factor]], merged_fs_4_re[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs4Reliability_re <- c(fs4Reliability_re, factorCorr)
+}
+
+fs4Reliab_df$short <- fs4Reliability_short
+fs4Reliab_df$long <- fs4Reliability_long
+fs4Reliab_df$re <- fs4Reliability_re
+
+# 6-factor
+fs6Reliability_short <- vector()
+
+for (factor in fs6Name){
+  factorCorr <- cor(merged_fs_6_short[[factor]], merged_fs_6_short[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs6Reliability_short <- c(fs6Reliability_short, factorCorr)
+}
+
+fs6Reliability_long <- vector()
+
+for (factor in fs6Name){
+  factorCorr <- cor(merged_fs_6_long[[factor]], merged_fs_6_long[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs6Reliability_long <- c(fs6Reliability_long, factorCorr)
+}
+
+fs6Reliability_re <- vector()
+
+for (factor in fs6Name){
+  factorCorr <- cor(merged_fs_6_re[[factor]], merged_fs_6_re[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs6Reliability_re <- c(fs6Reliability_re, factorCorr)
+}
+
+fs6Reliab_df$short_term <- fs6Reliability_short
+fs6Reliab_df$long_term <- fs6Reliability_long
+fs6Reliab_df$recurrance <- fs6Reliability_re
+```
+
+group reliability based on status: 
+
+continued: 476; completed: 158; abandoned: 82; adjusted: 35
+```{r}
+# subset variable rating datasets based on timepoint 
+merged_varRating_continued <- merged_varRating %>% filter(status == "continued")
+merged_varRating_completed <- merged_varRating %>% filter(status == "completed")
+merged_varRating_abandoned <- merged_varRating %>% filter(status == "abandoned")
+
+# generate pair-wise variable correlations for each timepoint
+varReliability_continued <- vector()
+
+for (var in variableName) {
+  varCorr <- cor(merged_varRating_continued[[var]], merged_varRating_continued[[paste0(var, "_post")]], use = "pairwise.complete.obs")
+  varReliability_continued <- c(varReliability_continued, varCorr)
+}
+
+varReliability_completed <- vector()
+
+for (var in variableName) {
+  varCorr <- cor(merged_varRating_completed[[var]], merged_varRating_completed[[paste0(var, "_post")]], use = "pairwise.complete.obs")
+  varReliability_completed <- c(varReliability_completed, varCorr)
+}
+
+varReliability_abandoned <- vector()
+
+for (var in variableName) {
+  varCorr <- cor(merged_varRating_abandoned[[var]], merged_varRating_abandoned[[paste0(var, "_post")]], use = "pairwise.complete.obs")
+  varReliability_abandoned <- c(varReliability_abandoned, varCorr)
+}
+
+varReliab_df$continued <- varReliability_continued
+varReliab_df$completed <- varReliability_completed
+varReliab_df$abandoned <- varReliability_abandoned
+```
+
+
+```{r}
+# subset factor score datasets based on timepoint
+merged_fs_4_continued <- merged_fs_4 %>% filter(status == "continued")
+merged_fs_4_completed <- merged_fs_4 %>% filter(status == "completed")
+merged_fs_4_abandoned <- merged_fs_4 %>% filter(status == "abandoned")
+merged_fs_6_continued <- merged_fs_6 %>% filter(status == "continued")
+merged_fs_6_completed <- merged_fs_6 %>% filter(status == "completed")
+merged_fs_6_abandoned <- merged_fs_6 %>% filter(status == "abandoned")
+
+# generate pair-wise variable correlations for each timepoint
+fs4Reliability_continued <- vector()
+
+for (factor in fs4Name){
+  factorCorr <- cor(merged_fs_4_continued[[factor]], merged_fs_4_continued[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs4Reliability_continued <- c(fs4Reliability_continued, factorCorr)
+}
+
+fs4Reliability_completed <- vector()
+
+for (factor in fs4Name){
+  factorCorr <- cor(merged_fs_4_completed[[factor]], merged_fs_4_completed[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs4Reliability_completed <- c(fs4Reliability_completed, factorCorr)
+}
+
+fs4Reliability_abandoned <- vector()
+
+for (factor in fs4Name){
+  factorCorr <- cor(merged_fs_4_abandoned[[factor]], merged_fs_4_abandoned[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs4Reliability_abandoned <- c(fs4Reliability_abandoned, factorCorr)
+}
+
+fs4Reliab_df$continued <- fs4Reliability_continued
+fs4Reliab_df$completed <- fs4Reliability_completed
+fs4Reliab_df$abandoned <- fs4Reliability_abandoned
+
+# 6-factor
+fs6Reliability_continued <- vector()
+
+for (factor in fs6Name){
+  factorCorr <- cor(merged_fs_6_continued[[factor]], merged_fs_6_continued[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs6Reliability_continued <- c(fs6Reliability_continued, factorCorr)
+}
+
+fs6Reliability_completed <- vector()
+
+for (factor in fs6Name){
+  factorCorr <- cor(merged_fs_6_completed[[factor]], merged_fs_6_completed[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs6Reliability_completed <- c(fs6Reliability_completed, factorCorr)
+}
+
+fs6Reliability_abandoned <- vector()
+
+for (factor in fs6Name){
+  factorCorr <- cor(merged_fs_6_abandoned[[factor]], merged_fs_6_abandoned[[paste0(factor, "_post")]], use = "pairwise.complete.obs")
+  fs6Reliability_abandoned <- c(fs6Reliability_abandoned, factorCorr)
+}
+
+fs6Reliab_df$continued <- fs6Reliability_continued
+fs6Reliab_df$completed <- fs6Reliability_completed
+fs6Reliab_df$abandoned <- fs6Reliability_abandoned
+```
+
+```{r}
+varReliab_df %>%
+  kable(format = "html", escape = F, caption = "pre-post reliability across variables") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+
+fs4Reliab_df %>%
+  kable(format = "html", escape = F, caption = "pre-post reliability across the 4 factors") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+
+fs6Reliab_df %>%
+  kable(format = "html", escape = F, caption = "pre-post reliability across the 6 variables") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+```
+
+write output datasets
+```{r}
+#write.csv(varReliab_df, here("TimeSeries", "Outputs", "varReliab.csv"))
+#write.csv(fs4Reliab_df, here("TimeSeries", "Outputs", "fs4Reliab.csv"))
+#write.csv(fs6Reliab_df, here("TimeSeries", "Outputs", "fs6Reliab.csv"))
+```
+
+# Pre-post contrast (pre-rating - post-rating)
+
+Variable level contrast
+```{r}
+# generate a pre-post contrast for each variable
+varDiff_df <- data.frame(matrix(, nrow=742, ncol=0))
+
+for (var in variableName) {
+  merged_varRating[[paste0(var, "_r")]] <- -merged_varRating[[var]]
+  varDiff <- rowSums(merged_varRating[c(paste0(var, "_post"), paste0(var, "_r"))], na.rm = F)
+  varDiff_df <- cbind(varDiff_df, data.frame(varDiff))
+}
+
+colnames(varDiff_df) <- variableName
+
+# descriptive for each variable
+colSums(varDiff_df, na.rm = T)
+
+varDiff_df <- cbind(varDiff_df, merged_varRating[c("MTurkCode", "total_goal", "goal", "goalType","status", "terminate_time", "time_point")])
+```
+
+
+```{r,  echo=FALSE,warning=FALSE,message=FALSE}
+# generate a pre-post contrast for each variable
+diff_fs_4 <- varDiff_df %>%
+  rowwise() %>%
+  mutate(Value = (attractiveness_achievement + attractiveness_progress + ideal_motivation + importance + construal_level + identified_motivation + meaningfulness + 
+                  instrumentality + difficulty + connectedness) / 10,
+         Clarity = (clarity + attainability + measurability + affordance + specificity - conflict + control) / 7,
+         External = (ought_motivation + external_motivation + external_importance + introjected_motivation + visibility) / 5,
+         Consensus = (-intrinsic_motivation + commonality + basic_needs + social_desirability) / 4) %>%
+  dplyr ::select(MTurkCode, goal, post_timePoint = time_point, Value, Clarity, External, Consensus, status, goalType)
+
+# group the contrast by time
+diff_fs_4 %>%
+  group_by(post_timePoint) %>%
+  summarise(across(Value:Consensus, ~ sum(.x, na.rm = T) / n())) %>%
+  kable(format = "html", escape = F, caption = "pre-post contrast by time") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+
+# group the contrast by type
+diff_fs_4 %>%
+  group_by(goalType) %>%
+  summarise(across(Value:Consensus, ~ sum(.x, na.rm = T) / n())) %>%
+  kable(format = "html", escape = F, caption = "pre-post contrast by type") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+
+# group the contrast by status
+diff_fs_4 %>%
+  group_by(status) %>%
+  summarise(across(Value:Consensus, ~ sum(.x, na.rm = T) / n())) %>%
+  kable(format = "html", escape = F, caption = "pre-post contrast by status") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+```
+
+```{r,  echo=FALSE,warning=FALSE,message=FALSE}
+# generate a pre-post contrast for each variable
+diff_fs_6 <- varDiff_df %>%
+  rowwise() %>%
+  mutate(Value = (attractiveness_achievement + attractiveness_progress  + importance + construal_level + identified_motivation + ideal_motivation + meaningfulness) / 7,
+         External = (ought_motivation + external_motivation + introjected_motivation + external_importance + conflict + visibility) / 6,
+         Attainability = (attainability - difficulty + clarity + affordance) /4,
+         Consensus = (commonality + basic_needs + social_desirability - intrinsic_motivation) / 4,
+         Measurability = (specificity + measurability) / 2,
+         Instrumentality = (connectedness + instrumentality + control) / 3) %>%
+  dplyr ::select(MTurkCode, goal, post_timePoint = time_point, Value, External, Attainability, Consensus, Measurability, Instrumentality, status, goalType)
+
+# group the contrast by time
+diff_fs_6 %>%
+  group_by(post_timePoint) %>%
+  summarise(across(Value:Instrumentality, ~ sum(.x, na.rm = T) / n())) %>%
+  kable(format = "html", escape = F, caption = "pre-post contrast by time") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+
+# group the contrast by type
+diff_fs_6 %>%
+  group_by(goalType) %>%
+  summarise(across(Value:Instrumentality, ~ sum(.x, na.rm = T) / n())) %>%
+  kable(format = "html", escape = F, caption = "pre-post contrast by type") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+
+# group the contrast by status
+diff_fs_6 %>%
+  group_by(status) %>%
+  summarise(across(Value:Instrumentality, ~ sum(.x, na.rm = T) / n())) %>%
+  kable(format = "html", escape = F, caption = "pre-post contrast by status") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+```
+
+# check the effect of type & status & time on the partical correlation between baseline factor score and final factor score
+
+```{r}
+merged_fs_6_nest <- merged_fs_6 %>%
+  gather(factor, value, c(Value: Instrumentality, Value_post: Instrumentality_post)) %>%
+  rowwise() %>%
+  mutate(time_point = case_when(
+    str_detect(factor, "_post") ~ "post",
+    TRUE ~ "baseline"
+  )) %>%
+  mutate(factor = case_when(
+     str_detect(factor, "_post") ~ str_sub(factor, 1, -6), 
+     TRUE ~ factor
+  )) %>%
+  spread(time_point, value) %>%
+  nest(-factor)
+
+```
+
+## Goal Type: 
+
+```{r}
+fs6Reliab_goalType <- merged_fs_6_nest %>%
+  mutate(fit = map(data, ~lm(post ~ baseline*goalType + progress_final, data = .x)),
+         tidied = map(fit, tidy, conf.int = TRUE),
+         ci = map(fit, confint), 
+         glance = map(fit, broom::glance),
+         rsq = glance %>% map_dbl('r.squared')) %>%
+  unnest(tidied) %>%
+  filter(term != "(Intercept)" & term != "progress_final") %>%
+  dplyr ::select(factor, term, estimate, std.error, statistic, p.value, conf.low, conf.high, rsq) %>%
+  mutate(across('term', str_replace, 'goalType', '')) %>%
+  mutate(across('term', str_replace, 'baseline', 'baseline rating')) %>%
+  #mutate(across('term', str_replace, 'recurrance', 'recurrent goals')) %>%
+  #mutate(across('term', str_replace, 'short-term', 'short-term goals')) %>%
+  mutate_if(is.numeric, round, 3)
+
+fs6Reliab_goalType %>%
+  filter(p.value < 0.05) %>%
+  #arrange(p.value) %>%
+  kable(format = "html", escape = F, caption = "Significant moderating effects of goal types on the factor reliability controlling for progress") %>%
+kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+#write.csv(fs6Reliab_goalType, here("TimeSeries", "Outputs", "fs6Reliab_goalType.csv"), row.names = F)
+```
+
+## Final Status
+```{r}
+fs6Reliab_finalStatus <- merged_fs_6_nest %>%
+  mutate(fit = map(data, ~lm(post ~ baseline*status_final + progress_final, data = .x)),
+         tidied = map(fit, tidy, conf.int = TRUE),
+         ci = map(fit, confint), 
+         glance = map(fit, broom::glance),
+         rsq = glance %>% map_dbl('r.squared')) %>%
+  unnest(tidied) %>%
+  filter(term != "(Intercept)" & term != "progress_final") %>%
+  dplyr ::select(factor, term, estimate, std.error, statistic, p.value, conf.low, conf.high, rsq) %>%
+  mutate(across('term', str_replace, 'status_final', '')) %>%
+  mutate(across('term', str_replace, 'baseline', 'baseline rating')) %>%
+  mutate_if(is.numeric, round, 3) 
+
+  
+fs6Reliab_finalStatus %>% 
+  filter(p.value < 0.05) %>%
+  #arrange(p.value) %>%
+  kable(format = "html", escape = F, caption = "Significant moderating effects of final status on the factor reliability controlling for progress") %>%
+kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+#write.csv(fs6Reliab_finalStatus, here("TimeSeries", "Outputs", "fs6Reliab_finalStatus.csv"), row.names = F)
+```
+
+## Time point
+```{r}
+fs6Reliab_finalTime <- merged_fs_6_nest %>%
+  mutate(fit = map(data, ~lm(post ~ baseline*post_timePoint + progress_final, data = .x)),
+         tidied = map(fit, tidy, conf.int = TRUE),
+         ci = map(fit, confint), 
+         glance = map(fit, broom::glance),
+         rsq = glance %>% map_dbl('r.squared')) %>%
+  unnest(tidied) %>%
+  filter(term != "(Intercept)" & term != "progress_final") %>%
+  dplyr ::select(factor, term, estimate, std.error, statistic, p.value, conf.low, conf.high, rsq) %>%
+  mutate(across('term', str_replace, 'post_timePoint', 'time-point: ')) %>%
+  mutate(across('term', str_replace, 'baseline', 'baseline rating')) %>%
+  mutate_if(is.numeric, round, 3)
+
+fs6Reliab_finalTime %>%
+  filter(p.value < 0.05) %>%
+  #arrange(p.value) %>%
+  kable(format = "html", escape = F, caption = "Significant moderating effects of final timepoint on the factor reliability controlling for progress") %>%
+kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+#write.csv(fs6Reliab_finalTime, here("TimeSeries", "Outputs", "fs6Reliab_finalTime.csv"), row.names = F)
+```
+

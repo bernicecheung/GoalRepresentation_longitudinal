@@ -39,15 +39,17 @@ wideDf <- read.csv(here("Baseline", "Inputs", "wideDf.csv"),stringsAsFactors = F
 indivDiffDf <- read.csv(here("Baseline", "Inputs", "indivDiffDf.csv"),stringsAsFactors = F)
 
 goalListDf <- read.csv(here("Baseline", "Outputs", "listedGoals.csv"), stringsAsFactors = F)
+
+goalDf_wide <- read.csv(here("Baseline", "Outputs", "goalDf_wide.csv"))
 ```
 
 # Data Screening for goal representation assessment
 
 ### Missing data
 
-Check the number of missing data per variable, and below is the top 5 variables. Missing data is rare for all variables
+Check the number of missing data per variable, and below is the top 5 variables. Missing data is rare for all variables except for external_importance. (5% of the goals had missing data) It was because there's a glitch of the display logical for one of the goal blocks. 
 ```{r}
-# check the number of "I'm not sure" responses per variable
+# check the number of missing data
 totalGoal <- nrow(goalRating_long_R)/41
 
 goalRating_long_R %>%
@@ -99,7 +101,7 @@ goalRating_long_R <- goalRating_long_R %>%
 
 ### The number of claimed goals
 
-Descriptive on the number of goals subject claimed to have prior to listing them (lower than the previous mTurk study)
+Descriptive on the number of goals subject claimed to have prior to listing them (lower than the previous mTurk study: mean = 4.4)
 ```{r}
 describe(wideDf$total_goal)
 ```
@@ -127,7 +129,7 @@ totalSub <- nrow(indivDiffDf)
 length(wideDf$total_goal[wideDf$total_goal>5])/totalSub
 ```
 
-Descriptive on the number of goals participants actual listed (similar to all previous study)
+Descriptive on the number of goals participants actual listed (similar to all previous study), but the distribution was different (on previous mTurk data, 5-goal had the highest frequency). 
 ```{r}
 describe(wideDf$listNum)
 ```
@@ -144,7 +146,7 @@ wideDf %>%
   theme_classic(base_size = 18) 
 ```
 
-number of people who listed 1 goal: 9
+number of people who listed 1 goal: 9 (less than previous)
 ```{r}
 length(wideDf$listNum[wideDf$listNum == 1])
 ```
@@ -171,7 +173,7 @@ goalDf_sum_wide_clean %>%
 ```
 
 
-percentage of people who listed more goals than they claimed: 13%
+percentage of people who listed more goals than they claimed: 13% (less than previous mTurk)
 ```{r}
 length(wideDf$diffNum[wideDf$diffNum <0])/totalSub *100
 ```
@@ -188,7 +190,7 @@ length(wideDf$diffNum[wideDf$diffNum >0])/totalSub *100
 ### Descriptive stats
 ```{r}
 # descriptive stats for each variable 
-goalRating_long_R %>%
+mTurk_b_descriptive <- goalRating_long_R %>%
   dplyr::select(variable, rating) %>%
   group_by(variable) %>%
   summarize(mean = mean(rating, na.rm = TRUE),
@@ -199,9 +201,17 @@ goalRating_long_R %>%
             skew = skew(rating, na.rm = T), 
             kurtosi = kurtosi(rating, na.rm = T)
             ) %>%
-  arrange(skew) %>%
+  arrange(skew)
+
+#write.csv(goalRating_long_R, here("Baseline", "Outputs", "goalRating_long_R.csv"), row.names = F)
+
+mTurk_b_descriptive %>%
   kable(format = "html", escape = F) %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+# order based on their skewness 
+#kable(varDf[order(varDf$skew),])
+
+#mTurk_b_descriptive <- write.csv(mTurk_b_descriptive, here("Baseline", "Outputs", "mTurk_b_descriptive.csv"), row.names = F)
 ```
 
 
@@ -236,11 +246,20 @@ write.csv(goalDf_wide, here("Baseline", "Outputs", "goalDf_wide.csv"), row.names
 
 left_join(goalListDf, goalDf_wide, by = c("MTurkCode","goal_order" = "goal")) %>%
   write.csv(., here("Baseline", "Outputs", "goalList_rating.csv"),row.names = F)
+
+#write.csv(corrM_all, here("Baseline", "Outputs", "mTurk_b_corrM_all.csv"), row.names = F)
+
+# correlation matrix among motivation items
+corr_M_motivation <- goalDf_wide %>%
+  dplyr :: select(contains("motivation")) %>%
+  corr.test(use = "pairwise.complete.obs")
+
+#write.csv(corr_M_motivation, here("Baseline", "Outputs", "corr_M_motivation.csv"))
 ```
 
 ### Variance Partition
 
-Only the 31 variables for goal representation are included. Only around 6.6% of the variance is on the between subject level. 
+Only the 31 variables for goal representation are included. Only around 6.7% of the variance is on the between subject level. (less than previous mTurk data)
 
 ```{r}
 # subset the long format dataset for only the 31 goal representation variable
@@ -260,14 +279,57 @@ Raw <- VarCorr(mlm) %>%
   as_tibble() %>%
   mutate(Raw=vcov/sum(vcov)) %>%
   dplyr :: select(Raw)
+
+# just for paper output
+mTurk_b_icc <- VarCorr(mlm) %>%
+  as_tibble() %>%
+  mutate(mTurk_b_icc=vcov/sum(vcov)) %>%
+  dplyr :: select(mTurk_b_icc)
+
+mTurk_b_icc$variation <- c("between-subject", "residual")
+
+# write.csv(mTurk_b_icc, here("Baseline", "Outputs", "mTurk_b_icc.csv"), row.names = F)
+```
+
+item wise ICC
+```{r}
+# create the function
+varPartition <- function(var, groupVar, data){
+  mlm <- lmer(var ~ 1 + (1|groupVar), data = data)
+  
+  outputDf <- VarCorr(mlm) %>%
+    as_tibble() %>%
+    mutate(outputDf=vcov/sum(vcov)) %>%
+    dplyr :: select(outputDf)
+}
+
+# apply the function to each variable after excluding subjects with just 1 goal
+df_cleaned <- goalDf_wide %>%
+  filter(total_goal != 1) %>%
+  select(-goal, -listNum, -total_goal, -goalType)
+
+
+mTurk_b_item_ICC <- df_cleaned %>%
+  select(-MTurkCode) %>%
+  map(~varPartition(., df_cleaned$MTurkCode, df_cleaned)) %>%
+  as_tibble() %>%
+  t() %>%
+  as.data.frame() %>%
+  select(V1) %>%
+  rename("mTurk_b_icc" = "V1") %>%
+  rownames_to_column("Items")
+
+#write.csv(mTurk_b_item_ICC, here("Baseline", "Outputs", "mTurk_b_item_ICC.csv"), row.names = F)
+
+
 ```
 
 
 # Exploritory Factor Analysis
 
-### Data transformation 
+## Data transformation 
 
-26 variables are included. Ordinal variables are not included: "temporal_duration" & "end_state_specificity" and "frequency"; appoach_avoidance_R & attainment_maintainance_R are also dropped because these 2 variables are more relevant to the phrasing/content of a goal than the perception of a goal. This step is consistent with the SONA study
+26 variables are included. Ordinal variables are not included: "temporal_duration" & "end_state_specificity" and "frequency"; appoach_avoidance_R & attainment_maintainance_R are also dropped because these 2 variables are more relevant to the phrasing/content of a goal than the perception of a goal. This step is consistent with the previous studies
 
 ```{r}
 # Exclude the 8 variables related to goal striving progress
@@ -280,13 +342,17 @@ goalDf_EFA <- subset(goalDf_EFA, select = affordance : visibility)
 
 # Generate a correctional matrix 
 corrM_raw <- cor(goalDf_EFA, use = "pairwise")
+#corrM_raw <- mixedCor(goalDf_EFA)$rho
+#corrM_raw <- cor.test(goalDf_EFA, method = "kendall")
+
 
 # export the correlation matrix
-write.csv(corrM_raw,here("Baseline", "Outputs", "baseline_corrRating_raw.csv"))
-write.csv(goalDf_EFA,here("Baseline", "Outputs", "baseline_EFA_raw.csv"), row.names = F)
+#write.csv(goalDf_R_wide,here("Baseline", "Outputs", "baseline_goalRap.csv"), row.names = F)
+#write.csv(corrM_raw,here("Baseline", "Outputs", "baseline_corrRating_raw.csv"), , row.names = F)
+#write.csv(goalDf_EFA,here("Baseline", "Outputs", "baseline_EFA_raw.csv"), row.names = F)
 ```
 
-### evaluate the number of factors
+## evaluate the number of factors
 ```{r}
 # use Very Simple Structure criterion
 res_vss <- psych :: nfactors(corrM_raw, n = 10, rotate = "promax", diagonal = FALSE, fm = "minres", 
@@ -325,15 +391,15 @@ fa_new_4 <-fa(r=corrM_raw, nfactors=4,n.obs = 845, rotate="promax", SMC=FALSE, f
 ```{r}
 fa.diagram(fa_new_4)
 ```
-
+The factors remain the same but some variables have shifted, such as intrinsic motivation
 ```{r}
 # visualization
 loadings <- fa.sort(fa_new_4)$loadings
 loadings <- as.data.frame(unclass(loadings))
-colnames(loadings) <- c("Value","External", "Clarity", "Consensus")
+colnames(loadings) <- c("Value","Clarity", "External", "Consensus")
 loadings$Items <- rownames(loadings)
 loadings.m <- loadings %>% gather(-Items, key = "Factor", value = "Loading")
-colOrder <- c("Value","External", "Clarity", "Consensus")
+colOrder <- c("Value","Clarity", "External", "Consensus")
 rowOrder <- rev(rownames(loadings))
 loadings.m<- arrange(mutate(loadings.m,Items=factor(Items,leve=rowOrder)),Items)
 loadings.m<- arrange(mutate(loadings.m,Factor=factor(Factor,leve=colOrder)),Factor)
@@ -347,29 +413,34 @@ ggplot(loadings.m, aes(Items, abs(Loading), fill=Loading)) +
                        high = "orange", mid = "white", low = "midnightblue", 
                        midpoint=0, guide="colourbar") +
   ylab("Loading Strength") + #improve y-axis label + 
-  ggtitle("Four Factor Solution from mTurk Sample 2") +
+  ggtitle("The Four Factor Solution from Study 5 Baseline") +
   geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
   theme_bw(base_size=10)
 ```
 
 interfactor correlation: 
 
-The correlation between clarity and value seems weird
+Less inter-correlated than the previous dataset
 ```{r}
-fa_new_4$Phi %>% 
+fa_corr_4_mTurk_b <- fa_new_4$Phi %>% 
   as.tibble() %>% 
-  dplyr::rename(External = MR1, Value = MR2, Clarity = MR3, Cansensus = MR4) %>%
+  dplyr::rename(Value = MR1, Clarity = MR2, External = MR3, Cansensus = MR4) %>%
   round(.,2) %>%
   remove_rownames() %>%
   mutate(factor = colnames(.)) %>%
-  select(factor, everything()) %>%
-  kable(format = "html", escape = F, caption = "<center>Factor Correlation of mTurk Sample 2</center>") %>%
+  select(factor, everything())
+
+fa_corr_4_mTurk_b %>%
+  kable(format = "html", escape = F, caption = "<center>Factor Correlation of mTurk Longitudinal</center>") %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+
+write.csv(fa_corr_4_mTurk_b, here("Baseline","Outputs", "fa_corr_4_mTurk_b.csv"), row.names = F)
 ```
 
-## Model fit
+## Model fit: 
+Less fit and has lower cummulated variance explained then the 4-factor model in mTurk 2 
 ```{r}
-data.frame(sample = "mTurk", factors = 4, items = 26, observation = 845, chi = fa_new_4$chi, BIC = fa_new_4$BIC, fit = fa_new_4$fit, RMSEA = fa_new_4$RMSEA[1], cumVar = max(fa_new_4$Vaccounted[3,]), complexity = mean(fa_new_4$complexity)) %>%
+data.frame(sample = "mTurk_l", factors = 4, items = 26, observation = 845, chi = fa_new_4$chi, BIC = fa_new_4$BIC, fit = fa_new_4$fit, RMSEA = fa_new_4$RMSEA[1], cumVar = max(fa_new_4$Vaccounted[3,]), complexity = mean(fa_new_4$complexity)) %>%
   remove_rownames() %>%
   kable(format = "html", escape = F) %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
@@ -382,7 +453,6 @@ sona_factorFit <- data.frame(sample = "mTurk", factors = 4, items = 26, observat
 
 ## 6 factor model
 
-
 ```{r}
 # extract 6 factors
 fa_new_6 <-fa(r=corrM_raw, nfactors=6,n.obs = 845, rotate="promax", SMC=FALSE, fm="minres")
@@ -392,6 +462,8 @@ fa_new_6 <-fa(r=corrM_raw, nfactors=6,n.obs = 845, rotate="promax", SMC=FALSE, f
 ```{r}
 fa.diagram(fa_new_6)
 ```
+
+factor value, external, attainability, consensus and measurability are similar across datasets. The factor that slip from value factor is different across studies
 ```{r}
 # visualization
 loadings <- fa.sort(fa_new_6)$loadings
@@ -413,9 +485,306 @@ ggplot(loadings.m, aes(Items, abs(Loading), fill=Loading)) +
                        high = "orange", mid = "white", low = "midnightblue", 
                        midpoint=0, guide="colourbar") +
   ylab("Loading Strength") + #improve y-axis label + 
-  ggtitle("Four Factor Solution from mTurk Sample 2") +
+  ggtitle("The Six Factor Solution from Study 5 Baseline") +
   geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
   theme_bw(base_size=10)
+```
+
+interfactor correlation: 
+
+factor value and instrumentality has the highest correlation
+```{r}
+fa_corr_6_mTurk_b <- fa_new_6$Phi %>% 
+  as.tibble() %>% 
+  dplyr::rename(Value = MR1, External = MR2, Attainability = MR3, Instrumentality = MR4, Consensus = MR5,Measurability = MR6) %>%
+  round(.,2) %>%
+  remove_rownames() %>%
+  mutate(factor = colnames(.)) %>%
+  select(factor, everything()) 
+
+fa_corr_6_mTurk_b %>%
+  kable(format = "html", escape = F, caption = "<center>Factor Correlation of mTurk Longitudinal</center>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+
+#write.csv(fa_corr_6_mTurk_b, here("Baseline", "Outputs", "fa_corr_6_mTurk_b.csv"), row.names = F)
+```
+
+## Model fit: 
+
+this 6-factor model fit a bit less than the SONA 2
+```{r}
+data.frame(sample = "mTurk_l", factors = 6, items = 26, observation = 845, chi = fa_new_6$chi, BIC = fa_new_6$BIC, fit = fa_new_6$fit, RMSEA = fa_new_6$RMSEA[1], cumVar = max(fa_new_6$Vaccounted[3,]), complexity = mean(fa_new_6$complexity)) %>%
+  remove_rownames() %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+sona_factorFit <- data.frame(sample = "mTurk_l", factors = 6, items = 26, observation = 845, chi = fa_new_6$chi, BIC = fa_new_6$BIC, fit = fa_new_6$fit, RMSEA = fa_new_6$RMSEA[1], cumVar = max(fa_new_6$Vaccounted[3,]), complexity = mean(fa_new_6$complexity))
+
+#write.csv(sona_factorFit, "./outputs/mTurk2_factorFit.csv", row.names = F)
+```
+
+## correlation between factor scores across different levels
+
+I double checked the labels but it's still very weird
+```{r fig.height= 2, fig.width=5}
+# create a hierarchical factor structure organization
+ba <- bassAckward(corrM_raw, c(4,6), rotate = "promax", scores = "Bartlett", adjust = T, cut = 0.3, use = "pairwise", plot = F)
+
+# re-label the factors with the factor names
+ba$labels[[1]] <- c("Value", "Clarity", "External", "Consensus")
+ba$labels[[2]] <- c("Value","External", "Attainability", "Instrumentality", "Consensus", "Measurability")
+
+# create the figure
+bassAckward.diagram(ba,digits=2,cut = .3,labels=NULL,marg=c(1.5,.5,1.0,.5),
+main="BassAckward",items=TRUE,sort=TRUE,lr=F,curves=F,organize=T) 
+```
+
+# EFA with polychoric correlation: 
+
+because the distribution of several variables were very skewed, it might be better to use polychoric correlation rather than Pearson's correlation
+
+## Data transformation 
+
+Generate the correlation matrix with polychoric correlation
+
+```{r}
+# Generate a correctional matrix with polychoric correaltion
+corrM_pc <- mixedCor(goalDf_EFA)$rho
+
+# export the correlation matrix
+write.csv(corrM_pc,here("Baseline", "Outputs", "baseline_corrRating_pc.csv"), row.names = F)
+```
+
+## evaluate the number of factors
+```{r}
+# use Very Simple Structure criterion
+res_vss <- psych :: nfactors(corrM_pc, n = 10, rotate = "promax", diagonal = FALSE, fm = "minres", 
+n.obs=845,title="Very Simple Structure",use="pairwise",cor="cor")
+
+# select useful parameters and organize them into a table
+cbind(1:10, res_vss$map) %>%
+  as_tibble() %>%
+  rename(., factor = V1, map = V2) %>%
+  cbind(., res_vss$vss.stats) %>%
+  select(factor, map, fit, complex, eChisq, SRMR, eCRMS, eBIC, eRMS) %>%
+  kable(format = "html", escape = F, caption = "VSS output -mTurk") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+
+```
+
+```{r}
+# Use the Scree plot to identify the number of factors have Eigenvalues >1 and the output from the Parallel analysis
+
+ev <- eigen(corrM_pc)
+ap <- parallel(subject=nrow(goalDf_EFA),var=ncol(goalDf_EFA),
+  rep=100,cent=.05)
+nS <- nScree(x=ev$values, aparallel=ap$eigen$qevpea)
+plotnScree(nS)
+```
+
+
+## Extract factors
+
+```{r}
+# extract 4 factors
+fa_pc_4 <-fa(r=corrM_pc, nfactors=4,n.obs = 845, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+## Factor loadings
+```{r}
+fa.diagram(fa_pc_4)
+```
+The factors remain the same but some variables have shifted, such as intrinsic motivation
+```{r}
+# visualization
+loadings <- fa.sort(fa_pc_4)$loadings
+loadings <- as.data.frame(unclass(loadings))
+colnames(loadings) <- c("Value","Clarity", "External", "Consensus")
+loadings$Items <- rownames(loadings)
+loadings.m <- loadings %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("Value","Clarity", "External", "Consensus")
+rowOrder <- rev(rownames(loadings))
+loadings.m<- arrange(mutate(loadings.m,Items=factor(Items,leve=rowOrder)),Items)
+loadings.m<- arrange(mutate(loadings.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(loadings.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Four Factor Solution from mTurk Longitudinal") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+
+interfactor correlation: 
+
+Less inter-correlated than the previous dataset
+```{r}
+fa_pc_4$Phi %>% 
+  as.tibble() %>% 
+  dplyr::rename(Value = MR1, Clarity = MR2, External = MR3, Cansensus = MR4) %>%
+  round(.,2) %>%
+  remove_rownames() %>%
+  mutate(factor = colnames(.)) %>%
+  select(factor, everything()) %>%
+  kable(format = "html", escape = F, caption = "<center>Factor Correlation of mTurk Longitudinal</center>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+```
+
+## Model fit: 
+
+It fits better than the one with pearson
+```{r}
+data.frame(sample = "mTurk_l", factors = 4, items = 26, observation = 845, chi = fa_pc_4$chi, BIC = fa_pc_4$BIC, fit = fa_pc_4$fit, RMSEA = fa_pc_4$RMSEA[1], cumVar = max(fa_pc_4$Vaccounted[3,]), complexity = mean(fa_pc_4$complexity)) %>%
+  remove_rownames() %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+longitudinal_factorFit <- data.frame(sample = "mTurk", factors = 4, items = 26, observation = 845, chi = fa_pc_4$chi, BIC = fa_pc_4$BIC, fit = fa_pc_4$fit, RMSEA = fa_pc_4$RMSEA[1], cumVar = max(fa_pc_4$Vaccounted[3,]), complexity = mean(fa_pc_4$complexity))
+
+#write.csv(sona_factorFit, "./outputs/mTurk2_factorFit.csv", row.names = F)
+```
+
+
+## 6 factor model
+
+```{r}
+# extract 6 factors
+fa_pc_6 <-fa(r=corrM_pc, nfactors=6,n.obs = 845, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+## Factor loadings
+```{r}
+fa.diagram(fa_pc_6)
+```
+
+
+```{r}
+# visualization
+loadings <- fa.sort(fa_pc_6)$loadings
+loadings <- as.data.frame(unclass(loadings))
+colnames(loadings) <- c("Value","External", "Attainability", "Consensus", "Measurability", "Instrumentality")
+loadings$Items <- rownames(loadings)
+loadings.m <- loadings %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("Value","External", "Attainability", "Consensus", "Measurability", "Instrumentality")
+rowOrder <- rev(rownames(loadings))
+loadings.m<- arrange(mutate(loadings.m,Items=factor(Items,leve=rowOrder)),Items)
+loadings.m<- arrange(mutate(loadings.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(loadings.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Six Factor Solution from mTurk Longitudinal") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+
+interfactor correlation: 
+
+factor value and instrumentality has the highest correlation
+```{r}
+fa_pc_6$Phi %>% 
+  as.tibble() %>% 
+  dplyr::rename(Value = MR1, External = MR2, Attainability = MR3, Consensus = MR4, Measurability = MR5,Instrumentality = MR6) %>%
+  round(.,2) %>%
+  remove_rownames() %>%
+  mutate(factor = colnames(.)) %>%
+  select(factor, everything()) %>%
+  kable(format = "html", escape = F, caption = "<center>Factor Correlation of mTurk Longitudinal</center>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+```
+
+## Model fit: 
+
+it fits better than the one with Pearson
+```{r}
+data.frame(sample = "mTurk_l", factors = 6, items = 26, observation = 845, chi = fa_pc_6$chi, BIC = fa_pc_6$BIC, fit = fa_pc_6$fit, RMSEA = fa_pc_6$RMSEA[1], cumVar = max(fa_pc_6$Vaccounted[3,]), complexity = mean(fa_pc_6$complexity)) %>%
+  remove_rownames() %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+longitudinal_factorFit <- data.frame(sample = "mTurk_l", factors = 6, items = 26, observation = 845, chi = fa_pc_6$chi, BIC = fa_pc_6$BIC, fit = fa_pc_6$fit, RMSEA = fa_pc_6$RMSEA[1], cumVar = max(fa_pc_6$Vaccounted[3,]), complexity = mean(fa_pc_6$complexity))
+
+#write.csv(sona_factorFit, "./outputs/mTurk2_factorFit.csv", row.names = F)
+```
+
+## correlation between factor scores across different levels
+
+I double checked the labels but it's still very weird
+```{r fig.height= 2, fig.width=5}
+# create a hierarchical factor structure organization
+ba <- bassAckward(corrM_pc, c(4,6), rotate = "promax", scores = "Bartlett", adjust = T, cut = 0.3, use = "pairwise", plot = F)
+
+# re-label the factors with the factor names
+ba$labels[[1]] <- c("Value", "Clarity", "External", "Consensus")
+ba$labels[[2]] <- c("Value","External", "Attainability", "Consensus", "Measurability", "Instrumentality")
+
+# create the figure
+bassAckward.diagram(ba,digits=2,cut = .3,labels=NULL,marg=c(1,0.2,1.0,0.2),
+main="BassAckward",items=TRUE,sort=TRUE,lr=F,curves=F,organize=T) 
+```
+
+# Factor Scores
+I will use the output from the polychoric correlation for the following analysis
+
+## 4-factor: 
+
+### Evaluation of Indeterminacy
+
+Evaluate the indeterminacy of each factor based on the square of the multiple correlation between each factor and the original variable. (range from 0 to 1)
+```{r}
+fa_pc_4$R2
+```
+
+Evaluate the indeterminacy of each factor based on the minimum possible corre- lation between two sets of competing factor scores, 2p2 - 1 (range from -1 to 1)
+```{r}
+2 * fa_pc_4$R2 -1
+```
+
+### Unweighted factor-based scores
+```{r}
+# use the 4-factor model
+factorScoreDf_4f <- goalDf_R_wide %>%
+  rowwise() %>%
+  mutate(Value = (attractiveness_achievement + attractiveness_progress + ideal_motivation + importance + construal_level + identified_motivation + meaningfulness + 
+                  instrumentality + difficulty + connectedness) / 10,
+         Clarity = (clarity + attainability + measurability + affordance + specificity - conflict + control) / 7,
+         External = (ought_motivation + external_motivation + external_importance + introjected_motivation + visibility) / 5,
+         Consensus = (-intrinsic_motivation + commonality + basic_needs + social_desirability) / 4) %>%
+  select(MTurkCode, goal, goalType, Value, Clarity, External, Consensus)
+
+# use the 6-factor model
+factorScoreDf_6f <- goalDf_R_wide %>%
+  rowwise() %>%
+  mutate(Value = (attractiveness_achievement + attractiveness_progress  + importance + construal_level + identified_motivation + ideal_motivation + meaningfulness) / 7,
+         External = (ought_motivation + external_motivation + introjected_motivation + external_importance + conflict + visibility) / 6,
+         Attainability = (attainability - difficulty + clarity + affordance) /4,
+         Consensus = (commonality + basic_needs + social_desirability - intrinsic_motivation) / 4,
+         Measurability = (specificity + measurability) / 2,
+         Instrumentality = (connectedness + instrumentality + control) / 3) %>%
+  select(MTurkCode, goal, goalType, Value, External, Attainability, Consensus, Measurability, Instrumentality)
+
+# write the csv factor score datasets
+write.csv(factorScoreDf_4f, here("Baseline", "Outputs", "factorScoreDf_4f.csv"), row.names = F)
+write.csv(factorScoreDf_6f, here("Baseline", "Outputs", "factorScoreDf_6f.csv"), row.names = F)
+```
+
+### Unit Scores (after z-score)
+```{r}
+# transform to z-score
+goalDf_EFA_z <- goalDf_EFA %>%
+  mutate(across(where(is.numeric), ~ scale(.x, center = TRUE, scale = TRUE)))
 ```
 
 

@@ -1,247 +1,247 @@
 "MTurkCode","age","gender","gender_4_TEXT","race","ethnicity","occupation","education","marital_status","income","subjectiveSES"
-30600,38,2,NA,"5",2,"Accounting Assistant ",4,1,3,3
-81705,32,1,NA,"1",1,"Self Employed",3,2,4,5
-63885,32,2,NA,"5",2,"Accountant",5,2,6,7
-26913,33,1,NA,"5",2,"HR",4,1,4,5
-42161,40,1,NA,"2",2,"Education Director",4,1,4,5
-84412,41,1,NA,"3",1,"",4,2,5,3
-92415,38,2,NA,"2",2,"sales manager",4,2,6,5
-51306,29,1,NA,"5",2,"pharm tech",4,1,4,3
-25224,26,2,NA,"5",2,"Unemployed",4,1,5,6
-12425,30,1,NA,"5",2,"systems administrator",4,2,4,4
-42560,30,2,NA,"3",2,"Project supervisor",2,1,4,4
-67994,31,2,NA,"5",2,"unemployed",4,2,7,7
-73451,30,2,NA,"2",2,"Sales Rep",4,2,2,6
-38491,25,1,NA,"5",2,"WireEDM Operator",2,1,4,2
-62166,29,1,NA,"5",2,"Support engineer",2,2,5,7
-59413,26,2,NA,"2",NA,"self-employed",4,1,6,3
-28254,57,2,NA,"5",2,"Retail Hiring Manager",4,2,6,7
-70471,33,1,NA,"5",1,"IT",4,2,4,4
-67967,62,1,NA,"5",NA,"Production supervisor",4,2,5,6
-87239,35,2,NA,"5",2,"Manager",5,2,7,7
-80450,50,2,NA,"2",2,"Financial Operations Manager",4,1,5,6
-46220,36,1,NA,"5",2,"Finance Manager",5,2,7,6
-98582,73,1,NA,"5",2,"Retired",5,2,6,7
-47834,32,2,NA,"3",2,"cashier",4,2,4,5
-12296,63,2,NA,"5",2,"Housewife",2,2,4,3
-38246,52,2,NA,"5",2,"salon owner",3,3,5,6
-85133,33,2,NA,"5",2,"Homemaker",5,2,3,4
-91955,39,1,NA,"5",2,"aquarium technician",2,1,1,4
-65521,53,1,NA,"5",2,"Software Engineer",5,2,7,7
-69652,36,2,NA,"5",2,"entertainer",2,1,4,5
-93470,48,2,NA,"5",2,"self-employed",3,1,2,4
-85353,38,2,NA,"5",2,"manufacturing",2,2,4,4
-98405,37,1,NA,"2",2,"company manager",4,2,5,6
-30384,30,2,NA,"3,5",2,"Data Processing",3,1,1,3
-10933,37,1,NA,"5",2,"Project Manager",2,2,6,6
-39168,35,1,NA,"5",2,"Software Engineer",3,1,2,5
-34512,25,1,NA,"2",2,"mTurk worker",4,1,1,5
-31475,27,1,NA,"5",2,"Risk manager",4,1,3,5
-63745,35,1,NA,"5",2,"Teacher",5,2,6,4
-12475,37,1,NA,"5",2,"IT Specialist",2,1,3,5
-79732,59,1,NA,"5",2,"Data Analyst",2,1,2,3
-22906,53,1,NA,"5",1,"Academic Dean",5,2,4,4
-53898,66,2,NA,"5",2,"retired, former customer service manager, retail",2,4,1,4
-75798,41,2,NA,"5",2,"Chef",4,1,4,3
-85424,60,1,NA,"5",NA,"",4,2,4,7
-78487,42,2,NA,"5",2,"CNA",3,1,3,5
-69242,58,1,NA,"5",2,"",5,2,5,6
-58948,56,2,NA,"5",2,"insurance adjuster",6,4,6,7
-63241,71,1,NA,"5",2,"Retired - Production/Planning Manager",4,4,3,4
-33635,31,1,NA,"5",2,"Mturker",2,2,1,2
-62486,46,2,NA,"3",2,"Optician",4,1,5,7
-25482,36,2,NA,"5",2,"Food Server",4,2,3,3
-37472,55,1,NA,"5",2,"electrical technician",3,1,1,4
-81005,52,1,NA,"5",2,"Accountant",4,1,7,8
-32371,25,2,NA,"5",2,"Office assistant",4,1,3,2
-87159,43,2,NA,"5",2,"Program Manager",5,2,6,8
-23348,66,2,NA,"5",2,"counselor",5,NA,6,7
-43627,61,2,NA,"5",2,"Librarian Assistant",3,4,1,2
-82737,31,2,NA,"1",1,"Unemployed",4,1,1,3
-15045,48,1,NA,"5",2,"shipping clerk",2,2,3,4
-21212,59,2,NA,"5",2,"home maker",2,2,4,5
-12568,26,1,NA,"5",2,"unemployed",2,1,5,3
-61492,22,1,NA,"2",2,"student",4,1,1,4
-97247,31,1,NA,"5",2,"pest control",1,1,1,4
-92357,32,1,NA,"2",2,"Sales",2,2,5,4
-21924,53,1,NA,"5",2,"horticulturist",2,2,4,6
-95193,44,1,NA,"3",2,"chef",3,3,3,3
-55333,21,2,NA,"5",NA,"e-sports streamer",3,1,1,8
-47532,51,1,NA,"5",2,"Warehouse manager",3,2,5,6
-85079,34,1,NA,"5",2,"Self Employed, office",2,1,1,1
-66597,30,1,NA,"6",1,"Musician/Teacher",4,1,4,8
-67366,66,1,NA,"5",2,"Retired",6,2,6,8
-41337,43,2,NA,"5",2,"Content Creator",3,1,4,6
-47407,57,1,NA,"5",2,"Self Employed",4,4,3,7
-56787,43,1,NA,"5",2,"Freelancer",2,2,3,4
-94107,57,2,NA,"3",2,"disabled",2,2,2,4
-31413,57,2,NA,"5",2,"teacher",5,2,6,7
-51752,38,2,NA,"5",2,"Assistant retail manager ",3,2,4,3
-82479,62,1,NA,"5",2,"",2,4,1,2
-12118,61,2,NA,"5",2,"Coordinator",4,4,2,5
-71387,32,1,NA,"5",2,"teacher",5,1,6,9
-41652,38,2,NA,"5",2,"freelancer",3,2,1,4
-96044,31,1,NA,"5",1,"Manager",4,2,3,4
-95300,35,1,NA,"5",2,"Office Manager",2,2,3,5
-81263,69,2,NA,"5",2,"Retired",4,2,5,7
-42084,19,2,NA,"5",2,"Student",2,1,7,8
-61166,47,1,NA,"2",2,"Finance",5,2,7,4
-19125,52,2,NA,"1,5",2,"contact tracer",4,2,4,7
-35126,50,1,NA,"5",2,"Full time substitute teacher",4,2,6,6
-59400,46,2,NA,"5",2,"case manager",4,2,5,6
-12116,32,1,NA,"5",2,"Marketing Assistant",4,1,4,6
-31288,46,2,NA,"5",2,"Media Clerk",3,1,2,3
-30817,40,1,NA,"5",2,"Behavioral Specialist",5,2,5,7
-43005,25,2,NA,"7",2,"cashier",4,1,3,5
-78783,29,1,NA,"5",1,"Data Entry",2,1,1,2
-83652,68,2,NA,"5",2,"Self-employed as a gig worker.",2,2,3,4
-20570,18,1,NA,"5",2,"student",2,1,4,5
-22795,36,1,NA,"5",2,"Retail Manager",3,2,3,3
-58501,50,1,NA,"5",2,"Financial Manager",4,2,5,7
-53517,60,2,NA,"5",2,"General Manager",4,4,4,4
-21447,70,2,NA,"5",2,"Retired",2,2,3,6
-38260,36,2,NA,"5",2,"cna",3,1,5,7
-83895,32,2,NA,"2",2,"Office assistant",4,1,7,8
-22137,39,1,NA,"5",2,"Hearing Aid Specialist",3,2,5,4
-72750,32,1,NA,"5",2,"Customer Service",2,1,2,5
-77553,40,2,NA,"3",2,"online media manager",4,2,4,5
-99523,70,1,NA,"5",2,"Amazon Turk Worker",4,3,2,3
-26763,57,1,NA,"5",2,"sales",4,1,3,4
-88223,52,2,NA,"5",2,"Administrator",4,2,6,6
-57498,52,2,NA,"5",2,"Reseller",6,4,3,3
-99305,21,1,NA,"2",2,"student",3,1,1,5
-44853,37,1,NA,"5",2,"Logistics",4,1,3,7
-86100,51,2,NA,"5",2,"Attorney & HR Professional",6,2,7,7
-93309,44,2,NA,"3",2,"analyst",4,1,4,3
-89230,37,2,NA,"5",2,"Teacher",5,2,4,5
-50480,58,2,NA,"5",2,"Provider contract implementation manager",3,1,4,4
-19490,42,2,NA,"5",2,"Freelance contractor",2,4,1,1
-14537,64,2,NA,"5",2,"retired SW",5,2,4,7
-12030,39,1,NA,"5",2,"unemployed",4,1,3,3
-38203,24,2,NA,"5",2,"Office assistant",4,1,7,4
-66776,48,2,NA,"5",2,"Self-employed",3,2,5,4
-57573,35,2,NA,"3",2,"Manufacturing",3,1,2,8
-30481,35,1,NA,"3",1,"Marketing",5,2,3,6
-58099,29,2,NA,"3",2,"nurse",3,2,4,6
-56953,38,1,NA,"5",2,"Marketing",4,1,6,6
-24230,37,2,NA,"5",2,"Security Analyst",4,2,6,5
-13286,31,2,NA,"5",2,"Accounts manager (Finance)",4,1,5,4
-32569,29,1,NA,"5",2,"",5,1,7,7
-18568,55,1,NA,"5",2,"Administration",2,2,6,8
-95989,34,1,NA,"5",2,"sports data reporter",4,1,3,6
-24355,63,2,NA,"5",2,"Retired (artist)",4,2,5,5
-80232,55,2,NA,"5",2,"Medical Claims Coder",3,4,3,4
-91493,52,1,NA,"5",2,"Client Relationship Manager",4,2,7,7
-84210,31,1,NA,"5",2,"Engineer",4,2,6,8
-83050,69,2,NA,"5",2,"Retired Nursing Home Administrator",4,2,5,6
-81107,33,1,NA,"5",1,"Library Specialist",3,1,4,5
-24832,31,1,NA,"5",2,"Administrative Manager",4,2,5,6
-46980,53,2,NA,"5",2,"Director of Operations",4,2,5,6
-36570,60,1,NA,"5",2,"social media analyst / professional musician",5,2,4,7
-33441,47,2,NA,"5",NA,"surgical technician ",4,2,6,7
-20317,60,2,NA,"5",2,"information/data/clerical",2,1,1,3
-41540,63,2,NA,"5",2,"disabled",2,4,1,1
-75013,70,2,NA,"5",2,"Area Supervisor for a Convenience Store Chain",2,3,3,5
-31309,33,1,NA,"2",2,"Market Research Analyst",4,1,5,6
-33742,51,2,NA,"3",1,"Marketing Sales",5,2,4,6
-38868,52,2,NA,"5",2,"Warehouse Manager",3,2,3,2
-86064,37,1,NA,"5",2,"laborer",2,1,1,2
-21317,32,1,NA,"5",2,"Business Owner/Online Reseller",4,1,1,4
-76210,62,2,NA,"5",2,"Medical Assistant/Health Surrogate",3,4,2,4
-27990,55,1,NA,"5",2,"Derivatives trader",6,1,6,7
-79586,31,1,NA,"5",2,"Sales Manager",4,2,5,7
-28920,38,1,NA,"5",2,"auditor",2,2,4,4
-98305,43,2,NA,"5",2,"Baker/ Decorator ",2,2,4,4
-24238,22,1,NA,"5",2,"Home Remodeler",2,1,5,5
-29845,36,2,NA,"5",2,"microbiologist",4,1,4,4
-45035,43,1,NA,"5",2,"MTurk",4,1,2,4
-14917,29,2,NA,"3",2,"Educational Middle Manager",2,2,5,7
-35405,31,1,NA,"5",2,"graphic designer",4,1,4,6
-13203,47,2,NA,"5",2,"Freelance",2,4,2,4
-16952,58,1,NA,"3",2,"security guard",2,4,1,3
-56219,33,2,NA,"5",2,"Manager",4,2,1,2
-86136,50,2,NA,"5",2,"homemaker",3,2,4,5
-14807,51,1,NA,"5",2,"Auditor",3,1,2,4
-47788,47,2,NA,"3",2,"Transcriptionist",4,4,1,2
-67237,60,2,NA,"5",2,"Retired Real Estate Agent",2,4,2,4
-42012,39,1,NA,"5",2,"Events Management",4,2,4,6
-64442,67,2,NA,"3",2,"Office Manager",2,1,4,6
-15085,56,2,NA,"5",2,"digital product manager",5,2,7,8
-55391,40,2,NA,"5",2,"homemaker and m-Turk worker",2,2,4,5
-71788,32,1,NA,"5",2,"IT",2,1,4,4
-16625,36,1,NA,"3",2,"Photograper",4,2,4,5
-41827,32,2,NA,"5",2,"Enrollment Specialist",5,2,6,7
-79249,31,2,NA,"5",2,"Baker/unemployed",3,2,3,4
-59650,43,1,NA,"5",2,"Insurance",4,2,5,6
-65127,53,2,NA,"5",2,"teacher",5,2,6,7
-60791,42,2,NA,"5",2,"",4,1,3,4
-67148,27,1,NA,"5",2,"Self employed",4,1,1,2
-94669,31,1,NA,"5",2,"Caregiver",2,1,2,4
-30736,51,2,NA,"5",2,"merchandiser",4,2,5,4
-35773,37,1,NA,"3",2,"Unemployed",4,2,4,5
-97837,46,2,NA,"3",2,"unemployed",2,2,4,3
-91379,47,1,NA,"5",2,"Financial Advisor",4,2,6,7
-44546,39,2,NA,"5",2,"teacher",7,2,5,4
-50800,52,2,NA,"5",2,"Business Associate",3,2,4,5
-45781,41,2,NA,"5",NA,"Teacher",5,4,4,7
-27116,32,1,NA,"3",2,"Supervisor",4,1,4,5
-87849,47,1,NA,"5",2,"IT Director",4,1,4,8
-71727,19,1,NA,"5",1,"Student",2,1,4,5
-52100,24,2,NA,"3",2,"Office Assistant",3,1,6,4
-99482,27,1,NA,"5",2,"Senior Financial Analyst",4,1,6,6
-95134,67,1,NA,"5",2,"Retired from US Army and working in public health",5,2,5,8
-38462,58,1,NA,"2",2,"Engineer",4,2,5,7
-63915,41,1,NA,"3",2,"disabled",2,1,1,2
-93067,67,2,NA,"5",2,"optician",2,2,4,8
-86564,67,2,NA,"5",2,"Self-employed writer",4,2,3,7
-68781,33,1,NA,"5",2,"Auditor",4,2,5,7
-56248,34,1,NA,"5",2,"IT Technician",2,1,3,2
-80182,36,2,NA,"5",2,"Administrator",4,2,4,3
-98715,33,2,NA,"5",2,"customer service ",4,1,3,4
-41061,71,1,NA,"5",2,"Retired MSW +2, LCSW. Private music teacher/ online worker.",6,4,3,5
-31649,46,2,NA,"3",2,"Lab Assistant",3,2,5,5
-89623,37,2,NA,"3",2,"Childcare",3,1,2,3
-10551,36,1,NA,"2,5",2,"Information Technology",3,1,3,5
-94247,61,2,NA,"5",2,"independent contractor",4,1,3,3
-53009,37,1,NA,"2",2,"Data analyst",4,2,4,6
-97443,68,2,NA,"5",2,"Retired printing company owner",2,2,2,5
-80704,30,2,NA,"3",2,"Healthcare",2,4,4,5
-77616,24,2,NA,"3",2,"Student / Freelancer",2,1,1,6
-27084,29,2,NA,"3,5",1,"salesperson",2,1,2,5
-35597,40,2,NA,"5",2,"Project Manager",3,1,3,3
-92931,52,2,NA,"5",2,"data entry specialist",2,2,3,3
-11469,31,1,NA,"5",2,"Data Analyst",4,2,4,6
-48293,53,1,NA,"5",2,"Dispatcher and courier",3,2,4,4
-85430,41,1,NA,"5",2,"freelance internet specialist",2,1,3,1
-76253,29,1,NA,"5",2,"Mturker",2,1,6,4
-58008,53,1,NA,"5",2,"I.T. Hardware Support",4,1,2,6
-86807,36,1,NA,"5",2,"teacher",5,2,5,3
-30222,28,1,NA,"2",2,"Regulatory Project Manager",5,2,7,7
-32709,28,2,NA,"5",2,"Packaging Development Manager",4,2,4,5
-32956,62,2,NA,"5",2,"Underwriting Technician in Health Insurance",3,2,4,6
-98095,33,1,NA,"5",2,"Field Engineer",3,2,6,7
-94931,46,2,NA,"2",2,"office manager",5,2,5,6
-37543,21,1,NA,"2",2,"",4,1,7,7
-41510,38,1,NA,"5",2,"retail sales",2,1,1,3
-26309,50,2,NA,"5",2,"customer support",2,4,6,6
-60186,53,2,NA,"5",2,"information svcs specialist",2,1,1,3
-63105,57,1,NA,"6",1,"retirement services",5,2,6,5
-12330,30,1,NA,"5",1,"TEACHER ",4,2,4,7
-55353,39,2,NA,"2",2,"",4,1,7,6
-39467,24,1,NA,"5",2,"Video Game Designer & MTurk",2,1,1,2
-46873,52,2,NA,"5",NA,"Customer Support ",2,1,2,6
-92099,53,2,NA,"3,5",2,"realtor",4,4,3,6
-45941,45,1,NA,"5",2,"Engineer",6,2,6,7
-92765,46,2,NA,"5",2,"",4,1,2,6
-32118,30,2,NA,"3",2,"Insurance Claims Adjuster",5,2,5,5
-56917,40,2,NA,"2",2,"Casting Assistant",4,1,5,7
-62812,49,2,NA,"1,5",1,"Activities Assistant",4,2,6,8
-82650,35,1,NA,"5",2,"Security manager and a private security company",3,2,3,6
-43268,33,2,NA,"5",1,"Educator",4,2,4,5
-33322,36,1,NA,"5",2,"Research Analyst",5,1,3,6
-24350,65,1,NA,"5",2,"retired due to disabilities. Former owner operator of Recovery Medical Transport.",3,4,4,5
-46136,37,1,NA,"5",2,"Contracts Administration ",5,2,7,7
-69629,39,2,NA,"5",2,"Self Employed",2,2,3,3
-26480,36,2,NA,"3",2,"",2,2,6,8
-38119,49,2,NA,"5",2,"Lab Manager",5,1,5,5
-89090,32,1,NA,"5",2,"Software Developer",4,2,6,6
+"AHYTT3T8W9Y9Y",38,2,NA,"5",2,"Accounting Assistant ",4,1,3,3
+"A3KNLR8H286IHT",32,1,NA,"1",1,"Self Employed",3,2,4,5
+"A3NRAEKWOKVUNN",32,2,NA,"5",2,"Accountant",5,2,6,7
+"AHGDYNKOKJWFJ",33,1,NA,"5",2,"HR",4,1,4,5
+"A1R5W4RQZTROD8",40,1,NA,"2",2,"Education Director",4,1,4,5
+"A1XUZFDVKP95VC",41,1,NA,"3",1,"",4,2,5,3
+"A22SZHZTF72TRM",38,2,NA,"2",2,"sales manager",4,2,6,5
+"A1G187YBG0DVMQ",29,1,NA,"5",2,"pharm tech",4,1,4,3
+"A2BJTPZLXIGO8D",26,2,NA,"5",2,"Unemployed",4,1,5,6
+"A2DVV59R1CQU6T",30,1,NA,"5",2,"systems administrator",4,2,4,4
+"A2ASTDMWBCFIP0",30,2,NA,"3",2,"Project supervisor",2,1,4,4
+"A21BXRUD15TQL8",31,2,NA,"5",2,"unemployed",4,2,7,7
+"AJ9O2ZA0E8UDZ",30,2,NA,"2",2,"Sales Rep",4,2,2,6
+"A3LL096CAY5WHB",25,1,NA,"5",2,"WireEDM Operator",2,1,4,2
+"A2LT6KC1X51FVW",29,1,NA,"5",2,"Support engineer",2,2,5,7
+"AWVLT2L5AP873",26,2,NA,"2",NA,"self-employed",4,1,6,3
+"A3U4SSUB9ZZ9T0",57,2,NA,"5",2,"Retail Hiring Manager",4,2,6,7
+"A2R9OK4M877ZCC",33,1,NA,"5",1,"IT",4,2,4,4
+"A1O9PAK6THJ9Y7",62,1,NA,"5",NA,"Production supervisor",4,2,5,6
+"A2AT6TSPPCR106",35,2,NA,"5",2,"Manager",5,2,7,7
+"A28J7H4TH29DC3",50,2,NA,"2",2,"Financial Operations Manager",4,1,5,6
+"A1VRG5HKZC0H0C",36,1,NA,"5",2,"Finance Manager",5,2,7,6
+"A351LMMMFYPM7U",73,1,NA,"5",2,"Retired",5,2,6,7
+"A2NHFSO7GMM8QR",32,2,NA,"3",2,"cashier",4,2,4,5
+"A2VNSNAN1LZBAM",63,2,NA,"5",2,"Housewife",2,2,4,3
+"A3KIZLHCD945UK",52,2,NA,"5",2,"salon owner",3,3,5,6
+"A1720HSKGQ41VJ",33,2,NA,"5",2,"Homemaker",5,2,3,4
+"A26NGLGGFTATVN",39,1,NA,"5",2,"aquarium technician",2,1,1,4
+"A30HUZHJBOX1LK",53,1,NA,"5",2,"Software Engineer",5,2,7,7
+"A4BDXOXC4D8FX",36,2,NA,"5",2,"entertainer",2,1,4,5
+"A3AJJHOAV7WIUQ",48,2,NA,"5",2,"self-employed",3,1,2,4
+"AS2MFSWNC5CQI",38,2,NA,"5",2,"manufacturing",2,2,4,4
+"A3VYBAO7UQQHGC",37,1,NA,"2",2,"company manager",4,2,5,6
+"A1G5EPLJEGL381",30,2,NA,"3,5",2,"Data Processing",3,1,1,3
+"A1CTUG0RUGCY48",37,1,NA,"5",2,"Project Manager",2,2,6,6
+"A6R5AQ4D638BH",35,1,NA,"5",2,"Software Engineer",3,1,2,5
+"A2KOR4003SVNC5",25,1,NA,"2",2,"mTurk worker",4,1,1,5
+"A1OJV3R8BH73BD",27,1,NA,"5",2,"Risk manager",4,1,3,5
+"A3OUNEJO97MM8E",35,1,NA,"5",2,"Teacher",5,2,6,4
+"A7P3R1AIA4TVV",37,1,NA,"5",2,"IT Specialist",2,1,3,5
+"A121T4P5NKCHCS",59,1,NA,"5",2,"Data Analyst",2,1,2,3
+"A3NLSGHK6RFXA8",53,1,NA,"5",1,"Academic Dean",5,2,4,4
+"AOS2PVHT2HYTL",66,2,NA,"5",2,"retired, former customer service manager, retail",2,4,1,4
+"A1TPGXT718D68E",41,2,NA,"5",2,"Chef",4,1,4,3
+"AKX5RHHO8BIUX",60,1,NA,"5",NA,"",4,2,4,7
+"A26UAJWMMNN351",42,2,NA,"5",2,"CNA",3,1,3,5
+"AM0QVBV8L6QCJ",58,1,NA,"5",2,"",5,2,5,6
+"A2X3FSFHV5GHJU",56,2,NA,"5",2,"insurance adjuster",6,4,6,7
+"A1F1TBDHPYAAXT",71,1,NA,"5",2,"Retired - Production/Planning Manager",4,4,3,4
+"AFMAFX0P2YRRV",31,1,NA,"5",2,"Mturker",2,2,1,2
+"A38BO0BRCQX6OV",46,2,NA,"3",2,"Optician",4,1,5,7
+"AIA7RZSAONU5M",36,2,NA,"5",2,"Food Server",4,2,3,3
+"A2615YW1YERQBO",55,1,NA,"5",2,"electrical technician",3,1,1,4
+"A3OPRR8AXT6OSJ",52,1,NA,"5",2,"Accountant",4,1,7,8
+"A1AIMKA54UBYIQ",25,2,NA,"5",2,"Office assistant",4,1,3,2
+"A286W816CMIZL9",43,2,NA,"5",2,"Program Manager",5,2,6,8
+"A3HXM7BGH18FOW",66,2,NA,"5",2,"counselor",5,NA,6,7
+"A770OB1ZAGJ4G",61,2,NA,"5",2,"Librarian Assistant",3,4,1,2
+"A17KN7NAP48L4B",31,2,NA,"1",1,"Unemployed",4,1,1,3
+"A110BZSDZN7E16",48,1,NA,"5",2,"shipping clerk",2,2,3,4
+"A1X388C6SDCDEY",59,2,NA,"5",2,"home maker",2,2,4,5
+"A1BSVEBYDZ0AAU",26,1,NA,"5",2,"unemployed",2,1,5,3
+"A1D2ZSPIHOI23K",22,1,NA,"2",2,"student",4,1,1,4
+"A2VGFS03KCCR1Q",31,1,NA,"5",2,"pest control",1,1,1,4
+"AYA1LRB27KSR1",32,1,NA,"2",2,"Sales",2,2,5,4
+"A132GRVDGXPJGY",53,1,NA,"5",2,"horticulturist",2,2,4,6
+"A39H9RIYRB5ZYV",44,1,NA,"3",2,"chef",3,3,3,3
+"A19YQU3ZZ8USPO",21,2,NA,"5",NA,"e-sports streamer",3,1,1,8
+"A2EK1HDV4I4GSK",51,1,NA,"5",2,"Warehouse manager",3,2,5,6
+"A11F3MA5FWH6SJ",34,1,NA,"5",2,"Self Employed, office",2,1,1,1
+"AHKRGPN5D3I2G",30,1,NA,"6",1,"Musician/Teacher",4,1,4,8
+"A1CI5U3BLQ2DDS",66,1,NA,"5",2,"Retired",6,2,6,8
+"A302KOFOYLD89A",43,2,NA,"5",2,"Content Creator",3,1,4,6
+"A3GI28OVLDI9ST",57,1,NA,"5",2,"Self Employed",4,4,3,7
+"A3PSV85ZUXP9VF",43,1,NA,"5",2,"Freelancer",2,2,3,4
+"A2ZGAH6NOSU2PO",57,2,NA,"3",2,"disabled",2,2,2,4
+"A30FIPRPFQRBO6",57,2,NA,"5",2,"teacher",5,2,6,7
+"AKMOBFEEKW378",38,2,NA,"5",2,"Assistant retail manager ",3,2,4,3
+"A18SXC3JEN1O0U",62,1,NA,"5",2,"",2,4,1,2
+"A198MSVO1VTAT5",61,2,NA,"5",2,"Coordinator",4,4,2,5
+"A1MJWY7UO3CDSM",32,1,NA,"5",2,"teacher",5,1,6,9
+"A2CP6MLJVJYBO7",38,2,NA,"5",2,"freelancer",3,2,1,4
+"AQMLJYUQCSG22",31,1,NA,"5",1,"Manager",4,2,3,4
+"A6JUD4NCQCDWG",35,1,NA,"5",2,"Office Manager",2,2,3,5
+"A2HQMB1GSEADL",69,2,NA,"5",2,"Retired",4,2,5,7
+"A1WS9UHL45VZ0X",19,2,NA,"5",2,"Student",2,1,7,8
+"AADRZTXSE7211",47,1,NA,"2",2,"Finance",5,2,7,4
+"A1ABL45KAK12A5",52,2,NA,"1,5",2,"contact tracer",4,2,4,7
+"A2W0G89O7E9EFO",50,1,NA,"5",2,"Full time substitute teacher",4,2,6,6
+"A38DHLB88V8DL8",46,2,NA,"5",2,"case manager",4,2,5,6
+"A1WJYF201K77BI",32,1,NA,"5",2,"Marketing Assistant",4,1,4,6
+"AF0W4ZBY7VXOU",46,2,NA,"5",2,"Media Clerk",3,1,2,3
+"A2H6Q22X1V1FTX",40,1,NA,"5",2,"Behavioral Specialist",5,2,5,7
+"ANZNAAS2K0DSY",25,2,NA,"7",2,"cashier",4,1,3,5
+"A2WZ8ZEB00LYF7",29,1,NA,"5",1,"Data Entry",2,1,1,2
+"A321WQIFK10UV3",68,2,NA,"5",2,"Self-employed as a gig worker.",2,2,3,4
+"A18JNQE5GZQIX5",18,1,NA,"5",2,"student",2,1,4,5
+"AXF0OX50YZQC6",36,1,NA,"5",2,"Retail Manager",3,2,3,3
+"A2VGEE0ZIZ8CBQ",50,1,NA,"5",2,"Financial Manager",4,2,5,7
+"ADYMIMV1PE14V",60,2,NA,"5",2,"General Manager",4,4,4,4
+"A1RWNYJA5X25YH",70,2,NA,"5",2,"Retired",2,2,3,6
+"A3UUH3632AI3ZX",36,2,NA,"5",2,"cna",3,1,5,7
+"A34VLM2UC0JY11",32,2,NA,"2",2,"Office assistant",4,1,7,8
+"ASY5W2HJPIPF4",39,1,NA,"5",2,"Hearing Aid Specialist",3,2,5,4
+"A2SFFO79KSG5VA",32,1,NA,"5",2,"Customer Service",2,1,2,5
+"A1T83SZBP2DN65",40,2,NA,"3",2,"online media manager",4,2,4,5
+"AVKMFV9CZ0MLR",70,1,NA,"5",2,"Amazon Turk Worker",4,3,2,3
+"A3OAXRZT3MVJML",57,1,NA,"5",2,"sales",4,1,3,4
+"A5E2P5F1AXYZ1",52,2,NA,"5",2,"Administrator",4,2,6,6
+"A3GZXU4FUJTKZD",52,2,NA,"5",2,"Reseller",6,4,3,3
+"A13O22EMG5ZVN0",21,1,NA,"2",2,"student",3,1,1,5
+"A207IHY6GERCFO",37,1,NA,"5",2,"Logistics",4,1,3,7
+"A225BMTMXUR5F4",51,2,NA,"5",2,"Attorney & HR Professional",6,2,7,7
+"A1IBLFQ2E6VA2J",44,2,NA,"3",2,"analyst",4,1,4,3
+"AIHHRINW9IN1I",37,2,NA,"5",2,"Teacher",5,2,4,5
+"A1Z2ZGPJRGG0G3",58,2,NA,"5",2,"Provider contract implementation manager",3,1,4,4
+"AU34T9OMHN4Z4",42,2,NA,"5",2,"Freelance contractor",2,4,1,1
+"A11ILN5YSUDVG8",64,2,NA,"5",2,"retired SW",5,2,4,7
+"A2GTBBZA2M82NR",39,1,NA,"5",2,"unemployed",4,1,3,3
+"AMTTB8JUWRRM7",24,2,NA,"5",2,"Office assistant",4,1,7,4
+"AQAXDL1INQC9Q",48,2,NA,"5",2,"Self-employed",3,2,5,4
+"AAHZCL4LIPCBQ",35,2,NA,"3",2,"Manufacturing",3,1,2,8
+"A2BEBDMQ7SI4IY",35,1,NA,"3",1,"Marketing",5,2,3,6
+"A1RQUOVV8PCXBM",29,2,NA,"3",2,"nurse",3,2,4,6
+"A1LS7GARU7CD08",38,1,NA,"5",2,"Marketing",4,1,6,6
+"A2FP41BSPG0Y4A",37,2,NA,"5",2,"Security Analyst",4,2,6,5
+"AS6FM754MF2B2",31,2,NA,"5",2,"Accounts manager (Finance)",4,1,5,4
+"A10LHWALI4BZPC",29,1,NA,"5",2,"",5,1,7,7
+"A3989GRV3UV5VW",55,1,NA,"5",2,"Administration",2,2,6,8
+"A1BG47GSHQ9WSU",34,1,NA,"5",2,"sports data reporter",4,1,3,6
+"A350SLJRMBIFM4",63,2,NA,"5",2,"Retired (artist)",4,2,5,5
+"A1BIJGB7XA0GME",55,2,NA,"5",2,"Medical Claims Coder",3,4,3,4
+"A5A14MTB35J23",52,1,NA,"5",2,"Client Relationship Manager",4,2,7,7
+"A3EXD5E390Z6B3",31,1,NA,"5",2,"Engineer",4,2,6,8
+"A2SKOPFTRTNFUY",69,2,NA,"5",2,"Retired Nursing Home Administrator",4,2,5,6
+"A1U8LTCX5XYJ45",33,1,NA,"5",1,"Library Specialist",3,1,4,5
+"A1W7I6FN183I8F",31,1,NA,"5",2,"Administrative Manager",4,2,5,6
+"A1SL72YBUW8Q8K",53,2,NA,"5",2,"Director of Operations",4,2,5,6
+"A1ZT0TLZZTT47M",60,1,NA,"5",2,"social media analyst / professional musician",5,2,4,7
+"A1561P9VVA3C1C",47,2,NA,"5",NA,"surgical technician ",4,2,6,7
+"A2PE32I58ANCDD",60,2,NA,"5",2,"information/data/clerical",2,1,1,3
+"APY7YO8CH0ZDP",63,2,NA,"5",2,"disabled",2,4,1,1
+"A1OR82RF1ZFWP",70,2,NA,"5",2,"Area Supervisor for a Convenience Store Chain",2,3,3,5
+"A2TLN8489YGY81",33,1,NA,"2",2,"Market Research Analyst",4,1,5,6
+"A3M81P9BEVE1GD",51,2,NA,"3",1,"Marketing Sales",5,2,4,6
+"A16Z9FSSF1X74O",52,2,NA,"5",2,"Warehouse Manager",3,2,3,2
+"AH00EJ6PK1H3A",37,1,NA,"5",2,"laborer",2,1,1,2
+"AUQTHU5AOZVQC",32,1,NA,"5",2,"Business Owner/Online Reseller",4,1,1,4
+"A169WH54HMYS5Z",62,2,NA,"5",2,"Medical Assistant/Health Surrogate",3,4,2,4
+"A248PLZABUKB62",55,1,NA,"5",2,"Derivatives trader",6,1,6,7
+"A2H92K2776A1IC",31,1,NA,"5",2,"Sales Manager",4,2,5,7
+"A1H5Q9HRH4RPZU",38,1,NA,"5",2,"auditor",2,2,4,4
+"A3O0ZQMDKOKAMR",43,2,NA,"5",2,"Baker/ Decorator ",2,2,4,4
+"A3E76V59BKGKCQ",22,1,NA,"5",2,"Home Remodeler",2,1,5,5
+"A2RMJNF6IPI42F",36,2,NA,"5",2,"microbiologist",4,1,4,4
+"ALDQRWYZ8KQ9A",43,1,NA,"5",2,"MTurk",4,1,2,4
+"A2F5QCUTZU7KF7",29,2,NA,"3",2,"Educational Middle Manager",2,2,5,7
+"A2B0FLA55RH047",31,1,NA,"5",2,"graphic designer",4,1,4,6
+"A2O2Q0LVWOWJ1G",47,2,NA,"5",2,"Freelance",2,4,2,4
+"A160L76BFKQQ1Q",58,1,NA,"3",2,"security guard",2,4,1,3
+"AJQ71YIGY01HZ",33,2,NA,"5",2,"Manager",4,2,1,2
+"A2YVAWO75X8R78",50,2,NA,"5",2,"homemaker",3,2,4,5
+"A2HJYX70UQW9XR",51,1,NA,"5",2,"Auditor",3,1,2,4
+"AY5QPUSEADPBG",47,2,NA,"3",2,"Transcriptionist",4,4,1,2
+"A1QT7BQZVOBSY0",60,2,NA,"5",2,"Retired Real Estate Agent",2,4,2,4
+"A1ADAWW4IHPCQ7",39,1,NA,"5",2,"Events Management",4,2,4,6
+"A15VI0QFR2YO50",67,2,NA,"3",2,"Office Manager",2,1,4,6
+"A3OLRWACCCCUTU",56,2,NA,"5",2,"digital product manager",5,2,7,8
+"A2196WCNDZULFS",40,2,NA,"5",2,"homemaker and m-Turk worker",2,2,4,5
+"ADJ9I7ZBFYFH7",32,1,NA,"5",2,"IT",2,1,4,4
+"A255RBA8P0K0XV",36,1,NA,"3",2,"Photograper",4,2,4,5
+"A3NKNOE5HIXXL",32,2,NA,"5",2,"Enrollment Specialist",5,2,6,7
+"A2IJEKMVEHQ90W",31,2,NA,"5",2,"Baker/unemployed",3,2,3,4
+"A3VZUPCZB4Q9XW",43,1,NA,"5",2,"Insurance",4,2,5,6
+"A1EH9BPKYXFBS5",53,2,NA,"5",2,"teacher",5,2,6,7
+"AJDHPRCJ985C7",42,2,NA,"5",2,"",4,1,3,4
+"A2NAKIXS3DVGAA",27,1,NA,"5",2,"Self employed",4,1,1,2
+"A3NXT3OVGL7QNR",31,1,NA,"5",2,"Caregiver",2,1,2,4
+"A2ESBX4C2Q6TQY",51,2,NA,"5",2,"merchandiser",4,2,5,4
+"A36ZURENFWTYOZ",37,1,NA,"3",2,"Unemployed",4,2,4,5
+"A2LU3430Q972IN",46,2,NA,"3",2,"unemployed",2,2,4,3
+"A21ZYTE6WOKUA",47,1,NA,"5",2,"Financial Advisor",4,2,6,7
+"A1B5SSGMTAQ9B5",39,2,NA,"5",2,"teacher",7,2,5,4
+"A2CYMT8T33U6EE",52,2,NA,"5",2,"Business Associate",3,2,4,5
+"A3BE3KXD518TZ4",41,2,NA,"5",NA,"Teacher",5,4,4,7
+"A3QSFE6GKO157S",32,1,NA,"3",2,"Supervisor",4,1,4,5
+"A3CAF7LTD3ORSG",47,1,NA,"5",2,"IT Director",4,1,4,8
+"A47VCO946DO5K",19,1,NA,"5",1,"Student",2,1,4,5
+"A1M8BYIP0KZJZX",24,2,NA,"3",2,"Office Assistant",3,1,6,4
+"A1D7IULWFI8PB1",27,1,NA,"5",2,"Senior Financial Analyst",4,1,6,6
+"A33RI08QRVG5Q0",67,1,NA,"5",2,"Retired from US Army and working in public health",5,2,5,8
+"A1IJ56N5Z4TT46",58,1,NA,"2",2,"Engineer",4,2,5,7
+"A196O7GQLD3S2J",41,1,NA,"3",2,"disabled",2,1,1,2
+"A2WJMGV0HKQG3Z",67,2,NA,"5",2,"optician",2,2,4,8
+"A1AZLJ3R5FQ9B7",67,2,NA,"5",2,"Self-employed writer",4,2,3,7
+"A2EMTSJS47K8SU",33,1,NA,"5",2,"Auditor",4,2,5,7
+"A1WQACYPLESVGL",34,1,NA,"5",2,"IT Technician",2,1,3,2
+"A1ZT30BGR3266K",36,2,NA,"5",2,"Administrator",4,2,4,3
+"A37PUSY6CJ7TQ0",33,2,NA,"5",2,"customer service ",4,1,3,4
+"A2R75YFKVALBXE",71,1,NA,"5",2,"Retired MSW +2, LCSW. Private music teacher/ online worker.",6,4,3,5
+"A1P3I7YCWXF9YG",46,2,NA,"3",2,"Lab Assistant",3,2,5,5
+"A3PGCZCYMXQMZ8",37,2,NA,"3",2,"Childcare",3,1,2,3
+"A1BWS5AD2T4NIR",36,1,NA,"2,5",2,"Information Technology",3,1,3,5
+"AYNDATHZBJZ6E",61,2,NA,"5",2,"independent contractor",4,1,3,3
+"A1SISJL5ST2PWH",37,1,NA,"2",2,"Data analyst",4,2,4,6
+"A27INSDNTACWAM",68,2,NA,"5",2,"Retired printing company owner",2,2,2,5
+"A3AE0JEXW4DB34",30,2,NA,"3",2,"Healthcare",2,4,4,5
+"A49CVVOWN4D6Y",24,2,NA,"3",2,"Student / Freelancer",2,1,1,6
+"AWTGJ45ZWUCHH",29,2,NA,"3,5",1,"salesperson",2,1,2,5
+"A1DD23J1WBGQUU",40,2,NA,"5",2,"Project Manager",3,1,3,3
+"AMA18W8F60Y2J",52,2,NA,"5",2,"data entry specialist",2,2,3,3
+"AIHUIAQ4922K3",31,1,NA,"5",2,"Data Analyst",4,2,4,6
+"A2Y0WNHMT4PZ4C",53,1,NA,"5",2,"Dispatcher and courier",3,2,4,4
+"A2AZYU1CT24O0K",41,1,NA,"5",2,"freelance internet specialist",2,1,3,1
+"AJ4T7PTRYNSUW",29,1,NA,"5",2,"Mturker",2,1,6,4
+"A1IL81UMEC9OJI",53,1,NA,"5",2,"I.T. Hardware Support",4,1,2,6
+"ARQR5NIFA1AJ",36,1,NA,"5",2,"teacher",5,2,5,3
+"A13WTEQ06V3B6D",28,1,NA,"2",2,"Regulatory Project Manager",5,2,7,7
+"A1J8TVICSRC70W",28,2,NA,"5",2,"Packaging Development Manager",4,2,4,5
+"A3ROYUO9LWA22S",62,2,NA,"5",2,"Underwriting Technician in Health Insurance",3,2,4,6
+"A1W850QN9RK019",33,1,NA,"5",2,"Field Engineer",3,2,6,7
+"A1YPOIURXB6ESR",46,2,NA,"2",2,"office manager",5,2,5,6
+"A1KC342L9WAQ2",21,1,NA,"2",2,"",4,1,7,7
+"AT6LDQNLKTUSE",38,1,NA,"5",2,"retail sales",2,1,1,3
+"A1ROEDVMTO9Y3X",50,2,NA,"5",2,"customer support",2,4,6,6
+"A22DDO8NILSX6O",53,2,NA,"5",2,"information svcs specialist",2,1,1,3
+"A2H0VR477QHYO7",57,1,NA,"6",1,"retirement services",5,2,6,5
+"A1K8VUKRL53OX",30,1,NA,"5",1,"TEACHER ",4,2,4,7
+"AJMWITY1XT7H7",39,2,NA,"2",2,"",4,1,7,6
+"A1J9Z2VOHTT1UZ",24,1,NA,"5",2,"Video Game Designer & MTurk",2,1,1,2
+"A3U2S6OPJNS4AQ",52,2,NA,"5",NA,"Customer Support ",2,1,2,6
+"AYPOAY43REHC8",53,2,NA,"3,5",2,"realtor",4,4,3,6
+"A3KIDRWRKC7RI5",45,1,NA,"5",2,"Engineer",6,2,6,7
+"ABOEYY9Y0PFRI",46,2,NA,"5",2,"",4,1,2,6
+"A1LJNQX4KBUXNP",30,2,NA,"3",2,"Insurance Claims Adjuster",5,2,5,5
+"ALAOEYIYW0CW7",40,2,NA,"2",2,"Casting Assistant",4,1,5,7
+"AY4E4CDN0J6JL",49,2,NA,"1,5",1,"Activities Assistant",4,2,6,8
+"A12JKSH2NE5W9N",35,1,NA,"5",2,"Security manager and a private security company",3,2,3,6
+"A1NVF1YLDLF563",33,2,NA,"5",1,"Educator",4,2,4,5
+"A1WZY0K6IE3ASG",36,1,NA,"5",2,"Research Analyst",5,1,3,6
+"AL7UTA8J27TFK",65,1,NA,"5",2,"retired due to disabilities. Former owner operator of Recovery Medical Transport.",3,4,4,5
+"A13FUEPWBCLBUY",37,1,NA,"5",2,"Contracts Administration ",5,2,7,7
+"A1XRWOK00HK1J4",39,2,NA,"5",2,"Self Employed",2,2,3,3
+"A1VFRCYMWGWWCZ",36,2,NA,"3",2,"",2,2,6,8
+"A314XJY8V1YL12",49,2,NA,"5",2,"Lab Manager",5,1,5,5
+"A3KFFIBJZVM0J2",32,1,NA,"5",2,"Software Developer",4,2,6,6

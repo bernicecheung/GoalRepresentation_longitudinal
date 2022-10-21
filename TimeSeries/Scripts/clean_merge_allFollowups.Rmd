@@ -1,0 +1,1299 @@
+---
+title: "clean_merge_allFollowups"
+author: "Bernice Cheung"
+date: "7/6/2021"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, echo=FALSE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(psych)
+library(janitor)
+library(kableExtra)
+library(here)
+```
+
+# Import all data
+
+import baseline data
+```{r}
+# import baseline data (after screening)
+baselineDf <- read.csv(here("Baseline", "Inputs", "wideDf.csv"))
+
+# import subject paring data
+pairDf <- read.csv(here("TimeSeries", "Inputs", "subPairing.csv"))
+```
+
+import all three follow-up data (remove the two header lines)
+```{r}
+# F1: 
+# load raw data
+rawDf <- read.csv(here("Raw_data", "Goal Longitudinal_F1_May 5, 2021_13.45.csv"), stringsAsFactors = F)
+
+rawDf_cleaned <- rawDf[-c(1,2),] %>% # delete the first two rows of labels and questions 
+  rename(PA1_F1_1 = PA1_F1_1_1, PC1_F1_1 = PC1_F1_1_1, PB1_F1_1 = PB1_F1_1_1,  # rename progress variables
+         PA1_F1_2 = PA1_F1_2_1, PC1_F1_2 = PC1_F1_2_1, PC3_F1_2 = PC3_F1_1.1, PB1_F1_2 = PB1_F1_2_1,
+         PA1_F1_3 = PA1_F1_3_1, PC1_F1_3 = PC1_F1_3_1, PB1_F1_3 = PB1_F1_3_1,
+         PA1_F1_4 = PA1_F1_4_1, PC1_F1_4 = PC1_F1_4_1, PB1_F1_4 = PB1_F1_4_1,
+         PA1_F1_5 =PA1_F1_5_1, PC1_F1_5 = PC1_F1_5_1, PB1_F1_5 = PB1_F1_5_1,
+         plan_F1_4 = plan_F4_4, adjustTime_F1_2 = adjustTime_F1_1.1, goalType_F1_4N = goalType_F1_4, resources_other_F1_1 = resources_Other_F1_1) %>% # correct a typo 
+  mutate(across(starts_with("status"), ~ recode(.x, `1` = "continued", # recode status
+                                               `2` = "completed",
+                                               `3` = "abandoned",
+                                               `4` = "adjusted")))
+
+
+# write the data without the 2 rows
+write.csv(rawDf_cleaned, here("Followups", "Inputs", "raw_F1_clean.csv"), row.names = F)
+
+# reload the raw cleaned dataframe
+F1Df <- read.csv(here("Followups", "Inputs", "raw_F1_clean.csv"),stringsAsFactors = F)
+
+# F2: 
+# load raw data
+rawDf <- read.csv(here("Raw_data", "Goal Longitudinal_F2_June 18, 2021_02.12.csv"), stringsAsFactors = F)
+
+# delete the first two rows of labels and questions 
+rawDf_cleaned <- rawDf[-c(1,2),] %>%
+  rename(PA1_F2_1 = PA1_F2_1_1, PC1_F2_1 = PC1_F2_1_1, PB1_F2_1 = PB1_F2_1_1,  # rename progress variables
+         PA1_F2_2 = PA1_F2_2_1, PC1_F2_2 = PC1_F2_2_1, PC3_F2_2 = PC3_F2_1.1, PB1_F2_2 = PB1_F2_2_1,
+         PA1_F2_3 = PA1_F2_3_1, PC1_F2_3 = PC1_F2_3_1, PB1_F2_3 = PB1_F2_3_1,
+         PA1_F2_4 = PA1_F2_4_1, PC1_F2_4 = PC1_F2_4_1, PB1_F2_4 = PB1_F2_4_1,
+         PA1_F2_5 =PA1_F2_5_1, PC1_F2_5 = PC1_F2_5_1, PB1_F2_5 = PB1_F2_5_1,
+         plan_F2_4 = plan_F4_4, adjustTime_F2_2 = adjustTime_F2_1.1, goalType_F2_4N = goalType_F2_4, resources_other_F2_1 = resources_Other_F2_1) %>% # correct a typo 
+  mutate(across(starts_with("status"), ~ recode(.x, `1` = "continued", # recode status
+                                               `2` = "completed",
+                                               `3` = "abandoned",
+                                               `4` = "adjusted")))
+
+# write the data without the 2 rows
+write.csv(rawDf_cleaned, here("Followups", "Inputs", "raw_F2_clean.csv"), row.names = F)
+
+# reload the raw cleaned dataframe
+F2Df <- read.csv(here("Followups", "Inputs", "raw_F2_clean.csv"),stringsAsFactors = F)
+
+# F3: 
+# load raw data
+rawDf <- read.csv(here("Raw_data", "Goal Longitudinal_F3_relabeled2_July 6, 2021_11.50.csv"), stringsAsFactors = F)
+
+# delete the first two rows of labels and questions 
+rawDf_cleaned <- rawDf[-c(1,2),] %>%
+  rename(PA1_F3_1 = PA1_F3_1_1, PC1_F3_1 = PC1_F3_1_1, PB1_F3_1 = PB1_F3_1_1,  # rename progress variables
+         PA1_F3_2 = PA1_F3_2_1, PC1_F3_2 = PC1_F3_2_1, PC3_F3_2 = PC3_F3_1.1, PB1_F3_2 = PB1_F3_2_1,
+         PA1_F3_3 = PA1_F3_3_1, PC1_F3_3 = PC1_F3_3_1, PB1_F3_3 = PB1_F3_3_1,
+         PA1_F3_4 = PA1_F3_4_1, PC1_F3_4 = PC1_F3_4_1, PB1_F3_4 = PB1_F3_4_1,
+         PA1_F3_5 = PA1_F3_5_1, PC1_F3_5 = PC1_F3_5_1, PB1_F3_5 = PB1_F3_5_1,
+         plan_F3_4 = plan_F4_4, adjustTime_F3_2 = adjustTime_F3_1.1, goalType_F3_4N = goalType_F3_4, resources_other_F3_1 = resources_Other_F3_1) %>% # correct a typo 
+  mutate(across(starts_with("status"), ~ recode(.x, `1` = "continued", # recode status
+                                               `2` = "completed",
+                                               `3` = "abandoned",
+                                               `4` = "adjusted")))
+
+# write the data without the 2 rows
+write.csv(rawDf_cleaned, here("Followups", "Inputs", "raw_F3_clean.csv"), row.names = F)
+
+# reload the raw cleaned dataframe
+F3Df <- read.csv(here("Followups", "Inputs", "raw_F3_clean.csv"),stringsAsFactors = F)
+```
+
+# Initiate a summary dataframe
+
+generate a summary Df from the baseline data
+```{r}
+summaryDf <- pairDf %>%
+  left_join(baselineDf, by = c("AmazonIdentifier" = "MTurkCode")) %>%
+  mutate(baseline_complete = ifelse(is.na(Finished), FALSE, TRUE)) %>%
+  select("MTurkCode" = AmazonIdentifier, baseline_complete, listNum, contains("Type")) %>%
+  mutate(across(c(goalType_1: goalType_5), ~ recode(.x, `1` = "short-term",
+                                               `2` = "long-term",
+                                               `3` = "recurrence")))
+```
+
+# Screen % clean follow-up datasets
+
+## Screen Follow-up 1: 
+
+### Check duration: 
+21 participants took less than 5 minutes to complete the first follow-up survey; all of them were continuing pursing their baseline goals. 
+```{r}
+F1Df$duration <- F1Df$Duration..in.seconds./60
+
+# check durations
+describe(F1Df$duration)
+
+hist(F1Df$duration, 20)
+
+# check subjects who completed within 5 minutes
+durationDf <- summaryDf %>%
+  left_join(F1Df, by = c("MTurkCode" = "workerId")) %>%
+  select(MTurkCode, listNum, duration, contains("status_")) %>%
+  arrange(duration) %>%
+  filter(duration < 5)
+
+duration_id <- durationDf$MTurkCode
+```
+
+### check missing data
+
+No participants missed more than one question in the goal progress evaluation section
+```{r}
+# select and modify variables only relevant to follow-up progress
+F1Df_progress <- F1Df %>%
+  left_join(baselineDf, by = c("workerId" = "MTurkCode")) %>%
+  rename(MTurkCode = workerId) %>%
+  filter(is.na(listNum) == FALSE) %>% # filter out subjects who didn't pass baseline screening
+  select(starts_with("status_"),starts_with("ACRISS"),starts_with("commitment"),starts_with("urgency"),starts_with("effort"),starts_with("AR"), # select goal progress relevant variables
+        starts_with("resources"),starts_with("plan"),paste0("PA1_F1_", 1:5),paste0("PA3_F1_", 1:5),paste0("PB1_F1_", 1:5),paste0("PB3_F1_", 1:5),paste0("PC1_F1_", 1:5),paste0("PC3_F1_", 1:5), starts_with("goalType_"), MTurkCode, listNum) %>%
+  select(-starts_with("goalType_F1")) %>%
+  rowwise() %>%
+  mutate(progress_F1_1 = case_when( # extract the corresponding progress and satisfaction ratings based on goal types
+    goalType_1 == 1 ~ PA1_F1_1,
+    goalType_1 == 2 ~ PB1_F1_1,
+    goalType_1 == 3 ~ PC1_F1_1),
+    progress_F1_2 = case_when(
+    goalType_2 == 1 ~ PA1_F1_2,
+    goalType_2 == 2 ~ PB1_F1_2,
+    goalType_2 == 3 ~ PC1_F1_2),
+    progress_F1_3 = case_when(
+    goalType_3 == 1 ~ PA1_F1_3,
+    goalType_3 == 2 ~ PB1_F1_3,
+    goalType_3 == 3 ~ PC1_F1_3),
+    progress_F1_4 = case_when(
+    goalType_4 == 1 ~ PA1_F1_4,
+    goalType_4 == 2 ~ PB1_F1_4,
+    goalType_4 == 3 ~ PC1_F1_4),
+    progress_F1_5 = case_when(
+    goalType_5 == 1 ~ PA1_F1_5,
+    goalType_5 == 2 ~ PB1_F1_5,
+    goalType_5 == 3 ~ PC1_F1_5),
+    satisfaction_F1_1 = case_when(
+    goalType_1 == 1 ~ PA3_F1_1,
+    goalType_1 == 2 ~ PB3_F1_1,
+    goalType_1 == 3 ~ PC3_F1_1),
+    satisfaction_F1_2 = case_when(
+    goalType_2 == 1 ~ PA3_F1_2,
+    goalType_2 == 2 ~ PB3_F1_2,
+    goalType_2 == 3 ~ PC3_F1_2),
+    satisfaction_F1_3 = case_when(
+    goalType_3 == 1 ~ PA3_F1_3,
+    goalType_3 == 2 ~ PB3_F1_3,
+    goalType_3 == 3 ~ PC3_F1_3),
+    satisfaction_F1_4 = case_when(
+    goalType_4 == 1 ~ PA3_F1_4,
+    goalType_4 == 2 ~ PB3_F1_4,
+    goalType_4 == 3 ~ PC3_F1_4),
+    satisfaction_F1_5 = case_when(
+    goalType_5 == 1 ~ PA3_F1_5,
+    goalType_5 == 2 ~ PB3_F1_5,
+    goalType_5 == 3 ~ PC3_F1_5)
+    ) %>%
+  select(-paste0("PA1_F1_", 1:5),-paste0("PA3_F1_", 1:5),-paste0("PB1_F1_", 1:5),-paste0("PB3_F1_", 1:5),-paste0("PC1_F1_", 1:5),-paste0("PC3_F1_", 1:5))
+
+# transform the progress rating df into a long format
+F1Df_progress_long <- F1Df_progress %>%
+  gather(variable, rating, c(status_F1_1: plan_F1_5, goalType_1: goalType_5, progress_F1_1: satisfaction_F1_5)) %>%
+  rowwise() %>%
+  mutate(goal = case_when( # generated the corresponding goal number from the variable name
+    str_detect(variable, "goalType") ~ str_split_fixed(variable, "_", n = 4)[2],
+    str_detect(variable, "resources") ~ str_split_fixed(variable, "_", n = 4)[4],
+    TRUE ~ str_split_fixed(variable, "_", n = 4)[3])) %>%
+  filter(goal <= listNum) # only include the ratings corresponding to the goals they listed at baseline
+
+
+
+# calculate the percentage of missing data
+F1Df_progress_long %>%
+  group_by(MTurkCode) %>%
+  summarise(missNum = sum(is.na(rating)),
+            totalNum = mean(listNum) * 17,
+            missPerc = ((missNum/totalNum) * 100)) %>%
+  arrange(desc(missPerc)) %>%
+  head(10)
+```
+
+### check repetitive response
+3 participants provided repetitive response for more than 10 questions in a row
+```{r}
+# extract columns with self-report ratings 
+F1Df_progress_rating <- F1Df_progress %>%
+  select(-c("MTurkCode", "listNum",starts_with("status_"), starts_with("goalType")))
+
+# extract the max number of repetitive response in a row
+variation <- apply(F1Df_progress_rating,1,function(x) rle(x))
+variation.length <-unlist(lapply(variation,function(x) max(x$lengths)))
+describe(variation.length)
+hist(variation.length, col = c(rep("orange", 2)))
+F1Df_progress$invariance_max <- variation.length
+
+# extract subject id who has more than 20 repetitive response in a row
+id_invariance <- F1Df_progress$MTurkCode[variation.length > 10]
+```
+
+### F1 Data screening summary
+
+There's no overlap between subjects who had really short duration and how had a large number of repetitive response. So, at this stage I would not screening out any subjects based on these criteira, but I'm going to mark them in the summary sheet. 
+```{r}
+# select variables relevant to screening
+F1_screenSum <- F1Df %>%
+  rename(MTurkCode = workerId) %>%
+  left_join(F1Df_progress[,c("MTurkCode", "invariance_max", "listNum")], by = "MTurkCode") %>%
+  select(MTurkCode, listNum, starts_with("status_"),duration, invariance_max)
+
+# sort by duration
+F1_screenSum %>%
+  arrange(duration) %>%
+  head(10)
+
+# sort by invariance_max
+F1_screenSum %>%
+  arrange(desc(invariance_max)) %>%
+  head(10)
+
+# flag participants who has duration < 5 or repetitive response > 10
+F1_screenSum <- F1_screenSum %>%
+  mutate(F1_screen_Flag = case_when(
+    duration < 5 ~ TRUE,
+    invariance_max > 10 ~ TRUE,
+    TRUE ~ FALSE
+  ),
+  F1_include = case_when( # would not include subject who were screened out at baseline
+    is.na(listNum) == TRUE ~ FALSE,
+    TRUE ~ TRUE
+  ))
+```
+
+### Merge the summary data
+
+```{r}
+# merge summary data
+summaryDf_F1 <- summaryDf %>%
+  left_join(select(F1Df, c(starts_with("status_"), workerId, Finished)), by = c("MTurkCode" = "workerId")) %>%
+  left_join(select(F1_screenSum, c(F1_screen_Flag, F1_include, MTurkCode)), by = "MTurkCode") %>%
+  rename(F1_complete = Finished) %>%
+  mutate(F1_complete = recode(F1_complete, `1` = TRUE)) %>%
+  mutate(F1_complete = replace_na(F1_complete, FALSE))
+```
+
+## Clean Follow-up 1 datasets 
+
+A clean dataset for the progress ratings for goals listed at baseline
+```{r}
+F1_progress_base <- F1Df_progress_long %>%
+  rowwise() %>%
+  mutate(variable = case_when(
+    str_detect(variable, "ACRISS") ~ paste0(substr(variable, 1,9), substr(variable,12,13)),
+    TRUE ~ str_sub(variable, 1, nchar(variable)-2))) %>%
+  spread (variable, rating)
+```
+
+A goal representation dataset for goals that are achieved or abandoned. 
+```{r}
+# filter out goals that are achieved or abandoned
+F1_terminateGoals <- F1_progress_base %>%
+  select(MTurkCode, goal, status_F1, listNum) %>%
+  rename(status = status_F1) %>%
+  filter(status == "completed" | status == "abandoned") %>%
+  mutate(F1_terminate = TRUE,
+         terminate_time = "F1")
+
+# transform the goal rep dataset into a long format
+F1_goalRep_long <- F1Df %>%
+  select(workerId, starts_with("G")) %>%
+  select(-starts_with("goal")) %>%
+  select(-c(G30_3, G30_4, G30_5)) %>% 
+  pivot_longer(
+    cols = starts_with("G"),
+    names_to = c("variable", "time_point", "goal"),
+    values_to = "rating",
+    names_prefix = "G",
+    names_sep = "_"
+  ) %>%
+  mutate(variable = as.numeric(variable)) %>%
+  filter(variable < 32) %>%
+  arrange(workerId, variable)# exclude variables corresponding to the progress rating for new goals
+
+# replace the variable numbers with the variable names
+variableName <- c("construal_level", "temporal_duration", "frequency", "specificity", "end_state_specificity", "approach_avoidance", "attainment_maintenance", "measurability", "importance", "meaningfulness", "instrumentality", "connectedness", "attractiveness_achievement", "attractiveness_progress", "social_desirability", "difficulty", "affordance", "attainability", "clarity", "control", "external_motivation", "introjected_motivation", "identified_motivation", "intrinsic_motivation", "ought_motivation", "ideal_motivation", "basic_needs", "commonality", "visibility", "external_importance", "conflict")
+
+replaceName <- rep(rep(variableName, each = 5), length(unique(F1_goalRep_long$workerId))) # repeat the name list for all five goals for each subject
+
+F1_goalRep_long$variable <- replaceName 
+
+# transform the goal rep dataset into a wide format
+F1_goalRep_wide <- F1_goalRep_long %>%
+  spread (variable, rating)
+
+# merge with the terminated goal dataset
+F1_goalRep_post_w <- F1_terminateGoals %>%
+  left_join(F1_goalRep_wide, by = c("MTurkCode" = "workerId", "goal")) %>%
+  select(-F1_terminate)
+
+# transform the wide format into a long format
+F1_goalRep_post_l <- F1_goalRep_post_w %>%
+  gather(affordance: visibility, key = "variable", value = "post_rating")
+```
+
+A goal representation dataset for goals that are adjusted
+```{r}
+# filter out goals that are adjusted
+F1_adjustGoals <- F1_progress_base %>%
+  select(MTurkCode, goal, status_F1, listNum) %>%
+  filter(status_F1 == "adjusted") %>%
+  mutate(F1_adjust = TRUE)
+
+# transform the goal rep dataset into a long format (including goal progress)
+F1_goalRep_long_aj <- F1Df %>%
+  select(workerId, starts_with("G")) %>%
+  select(-starts_with("goal")) %>%
+  select(-c(G30_3, G30_4, G30_5)) %>% 
+  pivot_longer(
+    cols = starts_with("G"),
+    names_to = c("variable", "time_point", "goal"),
+    values_to = "rating",
+    names_prefix = "G",
+    names_sep = "_"
+  ) %>%
+  mutate(variable = as.numeric(variable)) %>%
+  arrange(workerId, variable)
+
+# add the variables pertaining to progress
+variableName_progress <- c(variableName, c("commitment", "urgency", "effort", "initial_time", "regret", "procrastination", "failure", "self_resources", "other_resources", "implementation_intention"))
+
+replaceName <- rep(rep(variableName_progress, each = 5), length(unique(F1_goalRep_long_aj$workerId))) # repeat the name list for all five goals for each subject
+
+F1_goalRep_long_aj$variable <- replaceName
+
+# transform the goal rep dataset into a wide format
+F1_goalRep_wide_aj<- F1_goalRep_long_aj %>%
+  spread (variable, rating)
+
+# merge with the adjusted goal dataset
+F1_goalRep_adjust_w <- F1_adjustGoals %>%
+  left_join(F1_goalRep_wide_aj, by = c("MTurkCode" = "workerId", "goal")) %>%
+  rename(status = status_F1) %>%
+  select(-F1_adjust)
+
+# transform the wide format into a long format
+F1_goalRep_adjust_l <- F1_goalRep_adjust_w %>%
+  gather(affordance: visibility, key = "variable", value = "adjustBase_rating")
+```
+
+## Screen follow-up 2: 
+
+### Check duration: 
+
+35 participants took less than 5 minutes to complete the first follow-up survey; all of them were continuing pursing their baseline goals; The participants who had the shortest duration didn't provide any ratings (both of his/her goals have been terminated at F1 (either completed or abandoned)). 
+
+```{r}
+F2Df$duration <- F2Df$Duration..in.seconds./60
+
+# check durations
+describe(F2Df$duration)
+
+hist(F2Df$duration, 20)
+
+# check subjects who completed within 5 minutes
+durationDf <- summaryDf %>%
+  left_join(F2Df, by = c("MTurkCode" = "workerId")) %>%
+  select(MTurkCode, listNum, duration, contains("status_")) %>%
+  arrange(duration) %>%
+  filter(duration < 5)
+
+duration_id <- durationDf$MTurkCode
+```
+
+### check missing data
+
+Among participants who have missing data, most of them missed one question; 7 missed two questions
+```{r}
+# select and modify variables only relevant to follow-up progress
+F2Df_progress <- F2Df %>%
+  left_join(baselineDf, by = c("workerId" = "MTurkCode")) %>%
+  rename(MTurkCode = workerId) %>%
+  filter(is.na(listNum) == FALSE) %>% # filter out subjects who didn't pass baseline screening
+  select(starts_with("status_"),starts_with("ACRISS"),starts_with("commitment"),starts_with("urgency"),starts_with("effort"),starts_with("AR"), # select goal progress relevant variables
+        starts_with("resources"),starts_with("plan"),paste0("PA1_F2_", 1:5),paste0("PA3_F2_", 1:5),paste0("PB1_F2_", 1:5),paste0("PB3_F2_", 1:5),paste0("PC1_F2_", 1:5),paste0("PC3_F2_", 1:5), starts_with("goalType_"), MTurkCode, listNum) %>%
+  select(-starts_with("goalType_F2")) %>%
+  rowwise() %>%
+  mutate(progress_F2_1 = case_when( # extract the corresponding progress and satisfaction ratings based on goal types
+    goalType_1 == 1 ~ PA1_F2_1,
+    goalType_1 == 2 ~ PB1_F2_1,
+    goalType_1 == 3 ~ PC1_F2_1),
+    progress_F2_2 = case_when(
+    goalType_2 == 1 ~ PA1_F2_2,
+    goalType_2 == 2 ~ PB1_F2_2,
+    goalType_2 == 3 ~ PC1_F2_2),
+    progress_F2_3 = case_when(
+    goalType_3 == 1 ~ PA1_F2_3,
+    goalType_3 == 2 ~ PB1_F2_3,
+    goalType_3 == 3 ~ PC1_F2_3),
+    progress_F2_4 = case_when(
+    goalType_4 == 1 ~ PA1_F2_4,
+    goalType_4 == 2 ~ PB1_F2_4,
+    goalType_4 == 3 ~ PC1_F2_4),
+    progress_F2_5 = case_when(
+    goalType_5 == 1 ~ PA1_F2_5,
+    goalType_5 == 2 ~ PB1_F2_5,
+    goalType_5 == 3 ~ PC1_F2_5),
+    satisfaction_F2_1 = case_when(
+    goalType_1 == 1 ~ PA3_F2_1,
+    goalType_1 == 2 ~ PB3_F2_1,
+    goalType_1 == 3 ~ PC3_F2_1),
+    satisfaction_F2_2 = case_when(
+    goalType_2 == 1 ~ PA3_F2_2,
+    goalType_2 == 2 ~ PB3_F2_2,
+    goalType_2 == 3 ~ PC3_F2_2),
+    satisfaction_F2_3 = case_when(
+    goalType_3 == 1 ~ PA3_F2_3,
+    goalType_3 == 2 ~ PB3_F2_3,
+    goalType_3 == 3 ~ PC3_F2_3),
+    satisfaction_F2_4 = case_when(
+    goalType_4 == 1 ~ PA3_F2_4,
+    goalType_4 == 2 ~ PB3_F2_4,
+    goalType_4 == 3 ~ PC3_F2_4),
+    satisfaction_F2_5 = case_when(
+    goalType_5 == 1 ~ PA3_F2_5,
+    goalType_5 == 2 ~ PB3_F2_5,
+    goalType_5 == 3 ~ PC3_F2_5)
+    ) %>%
+  select(-paste0("PA1_F2_", 1:5),-paste0("PA3_F2_", 1:5),-paste0("PB1_F2_", 1:5),-paste0("PB3_F2_", 1:5),-paste0("PC1_F2_", 1:5),-paste0("PC3_F2_", 1:5))
+
+# transform the progress rating df into a long format
+F2Df_progress_long <- F2Df_progress %>%
+  gather(variable, rating, c(status_F2_1: plan_F2_5, goalType_1: goalType_5, progress_F2_1: satisfaction_F2_5)) %>%
+  rowwise() %>%
+  mutate(goal = case_when( # generated the corresponding goal number from the variable name
+    str_detect(variable, "goalType") ~ str_split_fixed(variable, "_", n = 4)[2],
+    str_detect(variable, "resources") ~ str_split_fixed(variable, "_", n = 4)[4],
+    TRUE ~ str_split_fixed(variable, "_", n = 4)[3])) %>%
+  filter(goal <= listNum) %>% # only include the ratings corresponding to the goals they listed at baseline
+  left_join(select(F1_terminateGoals, MTurkCode, goal, F1_terminate), by = c("MTurkCode", "goal")) %>%
+  filter(is.na(F1_terminate) == TRUE) # only include the ratings corresponding to goals that haven't been terminated at F1
+
+# calculate the percentage of missing data
+F2Df_progress_long %>%
+  group_by(MTurkCode) %>%
+  summarise(missNum = sum(is.na(rating)),
+            totalNum = mean(listNum) * 17,
+            missPerc = ((missNum/totalNum) * 100)) %>%
+  arrange(desc(missPerc)) %>%
+  head(10)
+```
+
+### check repetitive response
+3 participants provided repetitive response for more than 10 questions in a row
+```{r}
+# extract columns with self-report ratings 
+F2Df_progress_rating <- F2Df_progress %>%
+  select(-c("MTurkCode", "listNum",starts_with("status_"), starts_with("goalType")))
+
+# extract the max number of repetitive response in a row
+variation <- apply(F2Df_progress_rating,1,function(x) rle(x))
+variation.length <-unlist(lapply(variation,function(x) max(x$lengths)))
+describe(variation.length)
+hist(variation.length, col = c(rep("orange", 2)))
+F2Df_progress$invariance_max <- variation.length
+
+# extract subject id who has more than 20 repetitive response in a row
+id_invariance <- F2Df_progress$MTurkCode[variation.length > 10]
+```
+
+### F2 Data screening summary
+
+There's no overlap between subjects who had really short duration and how had a large number of repetitive response. So, at this stage I would not screening out any subjects based on these criteira, but I'm going to mark them in the summary sheet. 
+```{r}
+# exclude participants who terminated all their goals at F1
+
+F1_terminateSum = F1_terminateGoals %>%
+  group_by(MTurkCode) %>%
+  summarize(listNum = mean(listNum),
+            terminateSum = sum(F1_terminate),
+            terminatePerc = sum(F1_terminate)/listNum) # check the percentage of terminated goals at F1
+
+F1_allTerminate <- F1_terminateSum$MTurkCode[F1_terminateSum$listNum == F1_terminateSum$terminateSum]
+
+# select variables relevant to screening
+F2_screenSum <- F2Df %>%
+  rename(MTurkCode = workerId) %>%
+  left_join(F2Df_progress[,c("MTurkCode", "invariance_max", "listNum")], by = "MTurkCode") %>%
+  select(MTurkCode, listNum, starts_with("status_"),duration, invariance_max)
+
+# sort by duration
+F2_screenSum %>%
+  arrange(duration) %>%
+  head(10)
+
+# sort by invariance_max
+F2_screenSum %>%
+  arrange(desc(invariance_max)) %>%
+  head(10)
+
+# flag participants who has duration < 5 or repetitive response > 10
+F2_screenSum <- F2_screenSum %>%
+  mutate(F2_screen_Flag = case_when(
+    duration < 5 ~ TRUE,
+    invariance_max > 10 ~ TRUE,
+    TRUE ~ FALSE
+  ),
+  F2_include = case_when( 
+    is.na(listNum) == TRUE ~ FALSE, # would not include subject who were screened out at baseline
+    MTurkCode %in% F1_allTerminate ~ FALSE, # would not include subject who has terminated all their goals at F1
+    TRUE ~ TRUE
+  ))
+```
+
+### Merge the summary data
+
+```{r}
+# merge summary data
+summaryDf_F1 <- summaryDf %>%
+  left_join(select(F1Df, c(starts_with("status_"), workerId, Finished)), by = c("MTurkCode" = "workerId")) %>%
+  left_join(select(F1_screenSum, c(F1_screen_Flag, F1_include, MTurkCode)), by = "MTurkCode") %>%
+  rename(F1_complete = Finished) %>%
+  mutate(F1_complete = recode(F1_complete, `1` = TRUE)) %>%
+  mutate(F1_complete = replace_na(F1_complete, FALSE))
+
+
+# merge summary data
+summaryDf_F2 <- summaryDf_F1 %>%
+  left_join(select(F2Df, c(starts_with("status_"), workerId, Finished)), by = c("MTurkCode" = "workerId")) %>%
+  left_join(select(F2_screenSum, c(F2_screen_Flag, F2_include, MTurkCode)), by = "MTurkCode") %>%
+  rename(F2_complete = Finished) %>%
+  mutate(F2_complete = recode(F2_complete, `1` = TRUE)) %>%
+  mutate(F2_complete = replace_na(F2_complete, FALSE))
+```
+
+## Clean Follow-up 2 datasets: 
+
+
+A clean dataset for the progress ratings for goals continued from F1
+```{r}
+F2_progress_base <- F2Df_progress_long %>%
+  rowwise() %>%
+  mutate(variable = case_when( # cut the str represent goalID from variable name
+    str_detect(variable, "ACRISS") ~ paste0(substr(variable, 1,9), substr(variable,12,13)),
+    TRUE ~ str_sub(variable, 1, nchar(variable)-2))) %>%
+  spread (variable, rating)
+```
+
+A goal representation dataset for goals that are achieved or abandoned. 
+```{r}
+# filter out goals that are achieved or abandoned
+F2_terminateGoals <- F2_progress_base %>%
+  select(MTurkCode, goal, status_F2, listNum) %>%
+  rename(status = status_F2) %>%
+  filter(status == "completed" | status == "abandoned") %>%
+  mutate(F2_terminate = TRUE,
+         terminate_time = "F2")
+
+# transform the goal rep dataset into a long format
+F2_goalRep_long <- F2Df %>%
+  select(workerId, starts_with("G")) %>%
+  select(-starts_with("goal")) %>%
+  pivot_longer(
+    cols = starts_with("G"),
+    names_to = c("variable", "time_point", "goal"),
+    values_to = "rating",
+    names_prefix = "G",
+    names_sep = "_"
+  ) %>%
+  mutate(variable = as.numeric(variable)) %>%
+  filter(variable < 32) %>%
+  arrange(workerId, variable)# exclude variables corresponding to the progress rating for new goals
+
+# replace the variable numbers with the variable names
+variableName <- c("construal_level", "temporal_duration", "frequency", "specificity", "end_state_specificity", "approach_avoidance", "attainment_maintenance", "measurability", "importance", "meaningfulness", "instrumentality", "connectedness", "attractiveness_achievement", "attractiveness_progress", "social_desirability", "difficulty", "affordance", "attainability", "clarity", "control", "external_motivation", "introjected_motivation", "identified_motivation", "intrinsic_motivation", "ought_motivation", "ideal_motivation", "basic_needs", "commonality", "visibility", "external_importance", "conflict")
+
+replaceName <- rep(rep(variableName, each = 5), length(unique(F2_goalRep_long$workerId))) # repeat the name list for all five goals for each subject
+
+F2_goalRep_long$variable <- replaceName 
+
+# transform the goal rep dataset into a wide format
+F2_goalRep_wide <- F2_goalRep_long %>%
+  spread (variable, rating)
+
+# merge with the terminated goal dataset
+F2_goalRep_post_w <- F2_terminateGoals %>%
+  left_join(F2_goalRep_wide, by = c("MTurkCode" = "workerId", "goal")) %>% 
+  select(-F2_terminate)
+
+# transform the wide format into a long format
+F2_goalRep_post_l <- F2_goalRep_post_w %>%
+  gather(affordance: visibility, key = "variable", value = "post_rating")
+```
+
+A goal representation dataset for goals that are adjusted
+```{r}
+# filter out goals that are adjusted
+F2_adjustGoals <- F2_progress_base %>%
+  select(MTurkCode, goal, status_F2, listNum) %>%
+  filter(status_F2 == "adjusted") %>%
+  mutate(F2_adjust = TRUE)
+
+# transform the goal rep dataset into a long format (including goal progress)
+F2_goalRep_long_aj <- F2Df %>%
+  select(workerId, starts_with("G")) %>%
+  select(-starts_with("goal")) %>%
+  pivot_longer(
+    cols = starts_with("G"),
+    names_to = c("variable", "time_point", "goal"),
+    values_to = "rating",
+    names_prefix = "G",
+    names_sep = "_"
+  ) %>%
+  mutate(variable = as.numeric(variable)) %>%
+  arrange(workerId, variable)
+
+# add the variables pertaining to progress
+variableName_progress <- c(variableName, c("commitment", "urgency", "effort", "initial_time", "regret", "procrastination", "failure", "self_resources", "other_resources", "implementation_intention"))
+
+replaceName <- rep(rep(variableName_progress, each = 5), length(unique(F2_goalRep_long_aj$workerId))) # repeat the name list for all five goals for each subject
+
+F2_goalRep_long_aj$variable <- replaceName
+
+# transform the goal rep dataset into a wide format
+F2_goalRep_wide_aj<- F2_goalRep_long_aj %>%
+  spread (variable, rating)
+
+# merge with the adjusted goal dataset 
+F2_goalRep_adjust_w <- F2_adjustGoals %>%
+  left_join(F2_goalRep_wide_aj, by = c("MTurkCode" = "workerId", "goal")) %>% 
+  rename(status = status_F2)%>%
+  select(-F2_adjust)
+
+# transform the wide format into a long format
+F2_goalRep_adjust_l <- F2_goalRep_adjust_w %>%
+  gather(affordance: visibility, key = "variable", value = "adjustBase_rating")
+```
+
+## Merge F1 & F2 post-rating and adjusted baseline-rating
+
+Merge terminated goals
+```{r}
+F12_terminateGoals <- F1_terminateGoals %>%
+  bind_rows(F2_terminateGoals) %>%
+  select(-F1_terminate, -F2_terminate) %>%
+  mutate(terminated = TRUE)
+```
+
+Merge post-rating data
+```{r}
+# wide format
+F12_goalRep_post_w <- 
+  F1_goalRep_post_w %>%
+  bind_rows(F2_goalRep_post_w)
+
+# long format
+F12_goalRep_post_l <- 
+  F1_goalRep_post_l %>%
+  bind_rows(F2_goalRep_post_l)
+```
+
+Merge adjusted baseline-rating
+```{r}
+# wide format
+F12_goalRep_adjust_w <- 
+  F1_goalRep_adjust_w %>%
+  bind_rows(F2_goalRep_adjust_w)
+
+# long format
+F12_goalRep_adjust_l <- 
+  F1_goalRep_adjust_l %>%
+  bind_rows(F2_goalRep_adjust_l)
+```
+
+## Screen follow-up 3: 
+
+### exclude participants who terminated all their goals at either F1 or F2
+
+3 participants terminated all their goals at F2. In total, 4 participants have terminated all their goals before F3. 
+```{r}
+# exclude participants who terminated all their goals at F1
+F2_terminateSum = F2_terminateGoals %>%
+  group_by(MTurkCode) %>%
+  summarize(listNum = mean(listNum),
+            terminateSum = sum(F2_terminate),
+            terminatePerc = sum(F2_terminate)/listNum) # check the percentage of terminated goals at F2
+
+F2_allTerminate <- F2_terminateSum$MTurkCode[F2_terminateSum$listNum == F2_terminateSum$terminateSum]
+F12_allTerminate <- c(F1_allTerminate, F2_allTerminate)
+```
+
+### Check duration: 
+
+8 participants took less than 5 minutes to complete the first follow-up survey; all of them were continuing pursing their baseline goals; The participants who had the shortest duration didn't provide any ratings (both of his/her goals have been terminated at F1 (either completed or abandoned)). 
+
+```{r}
+F3Df$duration <- F3Df$Duration..in.seconds./60
+
+# check durations
+describe(F3Df$duration)
+
+hist(F3Df$duration, 20)
+
+# check subjects who completed within 5 minutes
+durationDf <- summaryDf %>%
+  left_join(F3Df, by = c("MTurkCode" = "workerId")) %>%
+  select(MTurkCode, listNum, duration, contains("status_")) %>%
+  filter(!MTurkCode %in% F12_allTerminate) %>% # filter out participants who terminated all their goals in previous follow-ups 
+  arrange(duration) %>%
+  filter(duration < 5)
+
+duration_id <- durationDf$MTurkCode
+```
+
+### check missing data
+
+For goal progress ratings:  
+
+1 subject missed almost all the questions and will be excluded; among others, 3 missed 4 questions and the rest missed no more than 3. 
+```{r}
+# select and modify variables only relevant to follow-up progress
+F3Df_progress <- F3Df %>%
+  left_join(select(baselineDf, MTurkCode, listNum, starts_with("goalType_")), by = c("workerId" = "MTurkCode")) %>%
+  rename(MTurkCode = workerId) %>%
+  filter(is.na(listNum) == FALSE) %>% # filter out subjects who didn't pass baseline screening
+  filter(!MTurkCode %in% F12_allTerminate) %>% #filter out participants who terminated all their goals in previous follow-ups
+  select(starts_with("status_"),starts_with("ACRISS"),starts_with("commitment"),starts_with("urgency"),starts_with("effort"),starts_with("AR"), # select goal progress relevant variables
+        starts_with("resources"),starts_with("plan"),paste0("PA1_F3_", 1:5),paste0("PA3_F3_", 1:5),paste0("PB1_F3_", 1:5),paste0("PB3_F3_", 1:5),paste0("PC1_F3_", 1:5),paste0("PC3_F3_", 1:5), starts_with("goalType_"), MTurkCode, listNum) %>%
+  select(-starts_with("goalType_F3")) %>%
+  rowwise() %>%
+  mutate(progress_F3_1 = case_when( # extract the corresponding progress and satisfaction ratings based on goal types
+    goalType_1 == 1 ~ PA1_F3_1,
+    goalType_1 == 2 ~ PB1_F3_1,
+    goalType_1 == 3 ~ PC1_F3_1),
+    progress_F3_2 = case_when(
+    goalType_2 == 1 ~ PA1_F3_2,
+    goalType_2 == 2 ~ PB1_F3_2,
+    goalType_2 == 3 ~ PC1_F3_2),
+    progress_F3_3 = case_when(
+    goalType_3 == 1 ~ PA1_F3_3,
+    goalType_3 == 2 ~ PB1_F3_3,
+    goalType_3 == 3 ~ PC1_F3_3),
+    progress_F3_4 = case_when(
+    goalType_4 == 1 ~ PA1_F3_4,
+    goalType_4 == 2 ~ PB1_F3_4,
+    goalType_4 == 3 ~ PC1_F3_4),
+    progress_F3_5 = case_when(
+    goalType_5 == 1 ~ PA1_F3_5,
+    goalType_5 == 2 ~ PB1_F3_5,
+    goalType_5 == 3 ~ PC1_F3_5),
+    satisfaction_F3_1 = case_when(
+    goalType_1 == 1 ~ PA3_F3_1,
+    goalType_1 == 2 ~ PB3_F3_1,
+    goalType_1 == 3 ~ PC3_F3_1),
+    satisfaction_F3_2 = case_when(
+    goalType_2 == 1 ~ PA3_F3_2,
+    goalType_2 == 2 ~ PB3_F3_2,
+    goalType_2 == 3 ~ PC3_F3_2),
+    satisfaction_F3_3 = case_when(
+    goalType_3 == 1 ~ PA3_F3_3,
+    goalType_3 == 2 ~ PB3_F3_3,
+    goalType_3 == 3 ~ PC3_F3_3),
+    satisfaction_F3_4 = case_when(
+    goalType_4 == 1 ~ PA3_F3_4,
+    goalType_4 == 2 ~ PB3_F3_4,
+    goalType_4 == 3 ~ PC3_F3_4),
+    satisfaction_F3_5 = case_when(
+    goalType_5 == 1 ~ PA3_F3_5,
+    goalType_5 == 2 ~ PB3_F3_5,
+    goalType_5 == 3 ~ PC3_F3_5)
+    ) %>%
+  select(-paste0("PA1_F3_", 1:5),-paste0("PA3_F3_", 1:5),-paste0("PB1_F3_", 1:5),-paste0("PB3_F3_", 1:5),-paste0("PC1_F3_", 1:5),-paste0("PC3_F3_", 1:5))
+
+# transform the progress rating df into a long format
+F3Df_progress_long <- F3Df_progress %>%
+  gather(variable, rating, c(status_F3_1: plan_F3_5, goalType_1: goalType_5, progress_F3_1: satisfaction_F3_5)) %>%
+  rowwise() %>%
+  mutate(goal = case_when( # generated the corresponding goal number from the variable name
+    str_detect(variable, "goalType") ~ str_split_fixed(variable, "_", n = 4)[2],
+    str_detect(variable, "resources") ~ str_split_fixed(variable, "_", n = 4)[4],
+    TRUE ~ str_split_fixed(variable, "_", n = 4)[3])) %>%
+  filter(goal <= listNum) %>% # only include the ratings corresponding to the goals they listed at baseline
+  left_join(select(F12_terminateGoals, MTurkCode, goal, terminated), by = c("MTurkCode", "goal")) %>%
+  filter(is.na(terminated) == TRUE) # only include the ratings corresponding to goals that haven't been terminated at F1
+
+F3_progress_base <- F3Df_progress_long %>%
+  rowwise() %>%
+  mutate(variable = case_when( # cut the str represent goalID from variable name
+    str_detect(variable, "ACRISS") ~ paste0(substr(variable, 1,9), substr(variable,12,13)),
+    TRUE ~ str_sub(variable, 1, nchar(variable)-2))) %>%
+  spread (variable, rating)
+
+# calculate the percentage of missing data
+F3Df_progress_sum <- F3Df_progress_long %>%
+  group_by(MTurkCode) %>%
+  summarise(missNum = sum(is.na(rating)),
+            totalNum = mean(listNum) * 17,
+            missPerc = ((missNum/totalNum) * 100)) %>%
+  arrange(desc(missPerc))
+
+missing_id <- F3Df_progress_sum$MTurkCode[1]
+```
+
+For goal post-representation ratings: 
+
+Other than the person who has been screen out for the progress rating, no participants have missed more than 3 questions 
+```{r}
+# transform the goal rep dataset into a long format
+F3_goalRep_long <- F3Df %>%
+  left_join(select(baselineDf, MTurkCode, listNum), by = c("workerId" = "MTurkCode")) %>%
+  rename(MTurkCode = workerId) %>%
+  select(MTurkCode, starts_with("G"), listNum) %>%
+  select(-starts_with("goal")) %>%
+  pivot_longer(
+    cols = starts_with("G"),
+    names_to = c("variable", "time_point", "goal"),
+    values_to = "rating",
+    names_prefix = "G",
+    names_sep = "_"
+  ) %>%
+  mutate(variable = as.numeric(variable)) %>%
+  filter(variable < 32) %>% # exclude variables corresponding to the progress rating for new goals
+  filter(!str_detect(goal, "N")) %>%
+  arrange(MTurkCode, variable)
+
+# replace the variable numbers with the variable names
+variableName <- c("construal_level", "temporal_duration", "frequency", "specificity", "end_state_specificity", "approach_avoidance", "attainment_maintenance", "measurability", "importance", "meaningfulness", "instrumentality", "connectedness", "attractiveness_achievement", "attractiveness_progress", "social_desirability", "difficulty", "affordance", "attainability", "clarity", "control", "external_motivation", "introjected_motivation", "identified_motivation", "intrinsic_motivation", "ought_motivation", "ideal_motivation", "basic_needs", "commonality", "visibility", "external_importance", "conflict")
+
+replaceName <- rep(rep(variableName, each = 5), length(unique(F3_goalRep_long$MTurkCode))) # repeat the name list for all five goals for each subject
+
+F3_goalRep_long$variable <- replaceName 
+
+# transform the goal rep dataset into a wide format
+F3_goalRep_post_w <- F3_goalRep_long %>%
+  filter(goal <= listNum) %>% # only include the ratings corresponding to the goals they listed at baseline
+  left_join(select(F12_terminateGoals, MTurkCode, goal, terminated), by = c("MTurkCode", "goal")) %>%
+  filter(is.na(terminated) == TRUE) %>% # only include the ratings corresponding to goals that haven't been terminated at F1
+  spread (variable, rating) %>%
+  select(-terminated)
+
+# transform the wide format into a long format
+F3_goalRep_post_l <- F3_goalRep_post_w %>%
+  gather(affordance: visibility, key = "variable", value = "post_rating")
+
+# calculate the percentage of missing data
+F3_goalRep_post_l %>%
+  group_by(MTurkCode) %>%
+  summarise(missNum = sum(is.na(post_rating)),
+            totalNum = mean(listNum) * 31,
+            missPerc = ((missNum/totalNum) * 100)) %>%
+  arrange(desc(missPerc))
+```
+
+### check repetitive response
+
+12 participants had repetitive response for more than 20 questions in a row (the criteria at baseline); The max is 38
+```{r}
+# extract columns with self-report ratings
+F3Df_rating <- F3_progress_base %>%
+  select(-c("listNum","status_F3", "terminated", "goalType")) %>%
+  left_join(F3_goalRep_post_w, by = c("MTurkCode", "goal")) %>%
+  select(-time_point)
+
+# extract the max number of repetitive response in a row
+variation <- apply(F3Df_rating,1,function(x) rle(x))
+variation.length <-unlist(lapply(variation,function(x) max(x$lengths)))
+#describe(variation.length)
+#hist(variation.length, col = c(rep("orange", 2)))
+F3Df_rating$invariance_max <- variation.length
+
+# transform to subject level summary data
+F3Df_rating_sum <- F3Df_rating %>%
+  group_by(MTurkCode) %>%
+  summarise(invariance_sum = sum(invariance_max), 
+            listNum = mean(listNum))
+
+describe(F3Df_rating_sum$invariance_sum)
+hist(F3Df_rating_sum$invariance_sum, col = c(rep("orange", 2)))
+
+# extract IDs who have repetitive response > 20
+invariance_id <- F3Df_rating_sum$MTurkCode[F3Df_rating_sum$invariance_sum > 20]
+```
+
+### F3 Data screening summary
+There's no overlap between subjects who had really short duration and how had a large number of repetitive response. So, at this stage I would not screening out any subjects based on these criteira, but I'm going to mark them in the summary sheet. 
+Out of the 217 subjects who submitted their F3 survey, I've excluded 2 subjects how were screened out at baseline, 4 subjects who have terminated all their goals at F1 or F2 and 1 subjects who missed almost all the questions
+```{r}
+# select variables relevant to screening
+F3_screenSum <- F3Df %>%
+  select(starts_with("status_"),duration, workerId) %>%
+  left_join(F3Df_rating_sum, by = c("workerId" = "MTurkCode")) %>%
+  rename(MTurkCode = workerId) %>%
+  select(MTurkCode, listNum, starts_with("status_"),duration, invariance_sum)
+
+# sort by duration
+F3_screenSum %>%
+  arrange(duration) %>%
+  head(10)
+
+# sort by invariance_sum
+F3_screenSum %>%
+  arrange(desc(invariance_sum)) %>%
+  head(10)
+
+# flag participants who has duration < 5 and exclude the subject who has missed almost all the questions 
+F3_screenSum <- F3_screenSum %>%
+  mutate(F3_duration_flag = case_when(
+    duration < 5 ~ TRUE,
+    TRUE ~ FALSE),
+    F3_invariance_flag = case_when(
+    invariance_sum > 20 ~ TRUE,
+    TRUE ~ FALSE)) %>%
+  rowwise() %>%
+  mutate(F3_flag_sum = sum(F3_duration_flag + F3_invariance_flag)) %>%
+  mutate(F3_include = case_when( 
+    is.na(listNum) == TRUE ~ FALSE, # would not include subject who were screened out at baseline
+    MTurkCode %in% F12_allTerminate ~ FALSE, # would not include subject who has terminated all their goals at F1 or F2
+    MTurkCode %in% missing_id ~ FALSE, # would not include the subject who missed almost all the questions
+    TRUE ~ TRUE
+  ))
+```
+
+### Merge summary data
+
+```{r}
+# merge summary data
+merged_summaryDf <- summaryDf_F2 %>%
+  left_join(select(F3Df, c(starts_with("status_"), workerId, Finished)), by = c("MTurkCode" = "workerId")) %>%
+  left_join(select(F3_screenSum, c(F3_duration_flag, F3_invariance_flag, F3_flag_sum, F3_include, MTurkCode)), by = "MTurkCode") %>%
+  rename(F3_complete = Finished) %>%
+  mutate(F3_complete = recode(F3_complete, `1` = TRUE)) %>%
+  mutate(F3_complete = replace_na(F3_complete, FALSE))
+```
+
+## Clean Follow-up 3 datasets: 
+
+A dataset for the goal representation ratings for adjusted goals
+```{r}
+# filter out goals that are adjusted
+F3_adjustGoals <- F3_progress_base %>%
+  select(MTurkCode, goal, status_F3, listNum) %>%
+  filter(status_F3 == "adjusted") %>%
+  mutate(F3_adjust = TRUE)
+
+# transform the goal rep dataset into a long format (including goal progress)
+F3_goalRep_long_aj <- F3Df %>%
+  select(workerId, starts_with("G")) %>%
+  select(-starts_with("goal")) %>%
+  pivot_longer(
+    cols = starts_with("G"),
+    names_to = c("variable", "time_point", "goal"),
+    values_to = "rating",
+    names_prefix = "G",
+    names_sep = "_"
+  ) %>%
+  mutate(variable = as.numeric(variable)) %>%
+  arrange(workerId, variable) %>%
+  filter(str_detect(goal, "N") | variable > 31) %>%
+  mutate(goal = case_when(str_detect(goal, "N") ~ str_sub(goal, 1, nchar(goal)-1),
+                          TRUE ~ goal))
+
+# add the variables pertaining to progress
+variableName_progress <- c(variableName, c("commitment", "urgency", "effort", "initial_time", "regret", "procrastination", "failure", "self_resources", "other_resources", "implementation_intention"))
+
+replaceName <- rep(rep(variableName_progress, each = 5), length(unique(F3_goalRep_long_aj$workerId))) # repeat the name list for all five goals for each subject
+
+F3_goalRep_long_aj$variable <- replaceName
+
+# transform the goal rep dataset into a wide format
+F3_goalRep_wide_aj<- F3_goalRep_long_aj %>%
+  spread (variable, rating)
+
+# merge with the adjusted goal dataset 
+F3_goalRep_adjust_w <- F3_adjustGoals %>%
+  left_join(F3_goalRep_wide_aj, by = c("MTurkCode" = "workerId", "goal")) %>% 
+  rename(status = status_F3)%>%
+  select(-F3_adjust)
+
+# transform the wide format into a long format
+F3_goalRep_adjust_l <- F3_goalRep_adjust_w %>%
+  gather(affordance: visibility, key = "variable", value = "adjustBase_rating")
+```
+
+## Merge post-rating and adjusted base-rating datasets
+
+Merge post-rating data:  
+
+756 goals were included in the post-rating datasets (including the ones that were achieved or abandoned at F1 or F2)
+```{r}
+# transform status data to goal level wide format
+F3_status <- F3Df %>%
+  select(workerId, starts_with("status_")) %>%
+  gather(status_F3_1: status_F3_5, key = "goal", value = "status") %>%
+  rowwise() %>%
+  mutate(goal = str_sub(goal, 11,11))
+
+# add status to the post-rating wide df
+F3_goalRep_post_w <- F3_goalRep_post_w %>%
+  left_join(select(F3_status, workerId, goal, status), by = c("MTurkCode" = "workerId", "goal" = "goal")) %>%
+  mutate(terminate_time = "F3")
+
+# merge with F1 & F2 post-rating wide df 
+merged_goalRep_post_w <- F12_goalRep_post_w %>%
+  bind_rows(F3_goalRep_post_w)
+
+F3_goalRep_post_l <- F3_goalRep_post_w %>%
+  gather(affordance: visibility, key = "variable", value = "post_rating")
+
+# long format
+merged_goalRep_post_l <- F12_goalRep_post_l %>%
+  bind_rows(F3_goalRep_post_l)
+```
+
+### generate factor scores from post-ratings
+
+Based on the baseline factor structure
+4-factor scores
+```{r}
+# use the 4-factor model
+factorScoreDf_4f_post <- merged_goalRep_post_w %>%
+  rowwise() %>%
+  mutate(Value = (attractiveness_achievement + attractiveness_progress + ideal_motivation + importance + construal_level + identified_motivation + meaningfulness + 
+                  instrumentality + difficulty + connectedness) / 10,
+         Clarity = (clarity + attainability + measurability + affordance + specificity - conflict + control) / 7,
+         External = (ought_motivation + external_motivation + external_importance + introjected_motivation + visibility) / 5,
+         Consensus = (-intrinsic_motivation + commonality + basic_needs + social_desirability) / 4) %>%
+  select(MTurkCode, goal, terminate_time, Value, Clarity, External, Consensus)
+
+# use the 6-factor model
+factorScoreDf_6f_post <- merged_goalRep_post_w %>%
+  rowwise() %>%
+  mutate(Value = (attractiveness_achievement + attractiveness_progress  + importance + construal_level + identified_motivation + ideal_motivation + meaningfulness) / 7,
+         External = (ought_motivation + external_motivation + introjected_motivation + external_importance + conflict + visibility) / 6,
+         Attainability = (attainability - difficulty + clarity + affordance) /4,
+         Consensus = (commonality + basic_needs + social_desirability - intrinsic_motivation) / 4,
+         Measurability = (specificity + measurability) / 2,
+         Instrumentality = (connectedness + instrumentality + control) / 3) %>%
+  select(MTurkCode, goal,terminate_time, Value, External, Attainability, Consensus, Measurability, Instrumentality)
+```
+
+Merge adjusted baseline-rating:  
+
+86 goals were adjusted and their "baseline" goal representation data is included in these two datasets
+```{r}
+# wide format
+merged_goalRep_adjust_w <- 
+  F12_goalRep_adjust_w %>%
+  bind_rows(F3_goalRep_adjust_w)
+
+# long format
+merged_goalRep_adjust_l <- 
+  F12_goalRep_adjust_l %>%
+  bind_rows(F3_goalRep_adjust_l)
+```
+
+# Data Summary
+
+## Subject Level: 
+
+retention rate:  
+252 subjects completed the baseline survey and 246 were included in the analysis (inclusion rate: 97.6%); The retention rates of three follow-up surveys respectively are : 90.7%; 84.6% and 88.2%. 78.9% of the participants were included in all four surveys. 200 (81.3 %) participants were included in at least 1 follow-up analysis, and 194 (78.86%) participants were included in all 4 follow-up studies. 756 (89.47%) goals had post goal representation ratings and were included in the post EFA analysis.  
+```{r}
+merged_summaryDf_subject <- merged_summaryDf %>%
+  rowwise() %>%
+  mutate(complete_num = baseline_complete + F1_complete + F2_complete + F3_complete,
+         included_num = baseline_complete + F1_include + F2_include + F3_include) %>%
+  ungroup() %>%
+  summarise(baseline_includeRate = sum(baseline_complete, na.rm = T) / 252,
+            F1_retentionRate = sum(F1_complete, na.rm = T) / sum(baseline_complete),
+            F1_includeRate = sum(F1_include, na.rm = T) / sum(baseline_complete),
+            F2_retentionRate = sum(F2_complete, na.rm = T) / sum(baseline_complete),
+            F2_includeRate = sum(F2_include, na.rm = T) / sum(baseline_complete),
+            F3_retentionRate = sum(F3_complete, na.rm = T) / sum(baseline_complete),
+            F3_includeRate = sum(F3_include, na.rm = T) / sum(baseline_complete),
+            complete_rate = sum(included_num == 4, na.rm = T) / sum(baseline_complete),
+            base_followup_rate = sum(included_num > 1, na.rm = T)/ sum(baseline_complete)) 
+
+merged_summaryDf_subject%>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+  
+```
+
+## Goal level: 
+
+845 goals were listed at baseline, and around 35% of them were recurrent goals. 150 goals were terminated (either completed or abandoned) before F3. 86 goals were adjusted. 
+```{r}
+merged_goalType_l <- merged_summaryDf %>%
+  gather(goalType_1: goalType_5, key = "goal", value = "goalType") %>%
+  rowwise() %>%
+  mutate(goal = str_sub(goal, 10,10)) %>%
+  filter(baseline_complete == TRUE & goal <= listNum)
+
+merged_F1_status_l <- merged_summaryDf %>%
+  gather(status_F1_1: status_F1_5, key = "goal", value = "F1_status") %>%
+  rowwise() %>%
+  mutate(goal = str_sub(goal, 11,11)) %>%
+  filter(F1_include == TRUE & goal <= listNum)
+
+merged_F2_status_l <- merged_summaryDf %>%
+  gather(status_F2_1: status_F2_5, key = "goal", value = "F2_status") %>%
+  rowwise() %>%
+  mutate(goal = str_sub(goal, 11,11)) %>%
+  filter(F2_include == TRUE & goal <= listNum)
+
+merged_F3_status_l <- merged_summaryDf %>%
+  gather(status_F3_1: status_F3_5, key = "goal", value = "F3_status") %>%
+  rowwise() %>%
+  mutate(goal = str_sub(goal, 11,11)) %>%
+  filter(F3_include == TRUE & goal <= listNum)
+
+merged_summaryDf_goal <- merged_goalType_l %>%
+  left_join(select(merged_F1_status_l, MTurkCode, goal, F1_status), by = c("MTurkCode", "goal")) %>%
+  left_join(select(merged_F2_status_l, MTurkCode, goal, F2_status), by = c("MTurkCode", "goal")) %>%
+  left_join(select(merged_F3_status_l, MTurkCode, goal, F3_status), by = c("MTurkCode", "goal")) %>%
+  select(MTurkCode, baseline_complete, listNum, goal, goalType, F1_include, F1_status, F2_include, F2_status, F3_include, F3_status)
+
+# summarize by each goal type
+merged_summaryDf_goal <- merged_summaryDf_goal %>%
+  group_by(goalType) %>%
+  summarise(total_goal = n(),
+            F1_continued = sum(F1_status =="continued", na.rm = T),
+            F1_completed = sum(F1_status =="completed", na.rm = T),
+            F1_abandoned = sum(F1_status =="abandoned", na.rm = T),
+            F1_adjusted = sum(F1_status =="adjusted", na.rm = T),
+            F2_continued = sum(F2_status =="continued", na.rm = T),
+            F2_completed = sum(F2_status =="completed", na.rm = T),
+            F2_abandoned = sum(F2_status =="abandoned", na.rm = T),
+            F2_adjusted = sum(F2_status =="adjusted", na.rm = T),
+            F3_continued = sum(F3_status =="continued", na.rm = T),
+            F3_completed = sum(F3_status =="completed", na.rm = T),
+            F3_abandoned = sum(F3_status =="abandoned", na.rm = T),
+            F3_adjusted = sum(F3_status =="adjusted", na.rm = T)) %>%
+  adorn_totals("row") 
+
+merged_summaryDf_goal%>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+## merge progress data
+add terminate_time to each progress dataset
+```{r}
+# merge progress data from all the follow-ups
+merged_progress_followup <- F1_progress_base %>%
+  left_join(select(F2_progress_base, -c(listNum, goalType, F1_terminate)), by = c("MTurkCode", "goal")) %>%
+  left_join(select(F3_progress_base, -c(listNum, goalType, terminated)), by = c("MTurkCode", "goal")) %>%
+  mutate(terminate_time = case_when(
+    status_F1 == "completed" ~ "F1", 
+    status_F1 == "abandoned" ~ "F1", 
+    status_F2 == "completed" ~ "F2", 
+    status_F2 == "abandoned" ~ "F2",
+    status_F3 == "completed" ~ "F3", 
+    status_F3 == "abandoned" ~ "F3")
+    ) %>%
+  mutate(across(c(goal, ACRISS_F1_1: ACRISS_F1_6, ACRISS_F2_1: ACRISS_F2_6, ACRISS_F3_1: ACRISS_F3_6), ~as.numeric(.x))) %>%
+  mutate(ACRISS_F1 = rowMeans(dplyr :: select(., ACRISS_F1_1: ACRISS_F1_6), na.rm = TRUE),
+         ACRISS_F2 = rowMeans(dplyr :: select(., ACRISS_F2_1: ACRISS_F2_6), na.rm = TRUE),
+         ACRISS_F3 = rowMeans(dplyr :: select(., ACRISS_F3_1: ACRISS_F3_6), na.rm = TRUE)) %>%
+  select(-c(ACRISS_F1_1: ACRISS_F1_6, ACRISS_F2_1: ACRISS_F2_6, ACRISS_F3_1: ACRISS_F3_6))
+
+# transform into a long format
+progressDf_l <- merged_progress_followup %>%
+  gather(variable, rating, c(AR_F1:effort_F1, plan_F1: urgency_F3, ACRISS_F1: ACRISS_F3)) %>%
+  rowwise() %>%
+  mutate(timeStamp = case_when(
+    str_detect(variable, "resources") ~ str_split_fixed(variable, "_", n = 4)[3],
+    TRUE ~ str_split_fixed(variable, "_", n = 4)[2]
+  )) %>%
+  mutate(variable = str_sub(variable, 1, -4))
+```
+
+merge with baseline progress
+```{r}
+# load baseline progress data
+baseline_progress_l <- read.csv(here("Baseline", "Outputs", "progress_base_l.csv")) %>%
+  mutate(rating = as.numeric(rating))
+baseline_progress_l$timeStamp <- "baseline"
+baseline_progress_w <- read.csv(here("Baseline", "Outputs", "progress_base_w.csv"))
+
+# load baseline striving data
+baseline_striving_l <- read.csv(here("Baseline", "Outputs", "strive_base_l.csv"))
+baseline_striving_l$timeStamp <- "baseline"
+baseline_striving_w <- read.csv(here("Baseline", "Outputs", "strive_base_w.csv"))
+
+# merge the wide format data
+merged_progress_w <- baseline_progress_w %>%
+  left_join(select(baseline_striving_w, -listNum, -goalType), by = c("MTurkCode", "goal")) %>%
+  left_join(select(merged_progress_followup, -listNum, -goalType), by = c("MTurkCode", "goal"))
+
+# merge the long format data
+merged_progress_l <- baseline_progress_l %>%
+  bind_rows(select(baseline_striving_l, -total_goal)) %>%
+  mutate(rating = as.character(rating)) %>% # have to convert the ratings into character because the ratings for status are str
+  bind_rows(progressDf_l)
+```
+
+write cleaned datasets: 
+
+```{r}
+# summary datasets :
+#write.csv(merged_summaryDf_subject, here("TimeSeries", "Inputs", "merged_summaryDf_subject.csv"), row.names = F)
+#write.csv(merged_summaryDf_goal, here("TimeSeries", "Inputs", "merged_summaryDf_goal.csv"), row.names = F)
+
+# cleaned post-rating datasets: 
+#write.csv(merged_goalRep_post_w, here("TimeSeries", "Inputs", "merged_goalRep_post_w.csv"), row.names = F)
+#write.csv(merged_goalRep_post_l, here("TimeSeries", "Inputs", "merged_goalRep_post_l.csv"), row.names = F)
+
+# cleaned base-rating for adjusted goals: 
+#write.csv(merged_goalRep_adjust_w, here("TimeSeries", "Inputs", "merged_goalRep_adjust_w.csv"), row.names = F)
+#write.csv(merged_goalRep_adjust_l, here("TimeSeries", "Inputs", "merged_goalRep_adjust_l.csv"), row.names = F)
+
+# cleaned merged progress data
+#write.csv(merged_progress_w, here("TimeSeries", "Inputs", "merged_progress_w.csv"), row.names = F)
+#write.csv(merged_progress_l, here("TimeSeries", "Inputs", "merged_progress_l.csv"), row.names = F)
+
+# cleaned post factor score data
+factorScoreDf_4f_post <- factorScoreDf_4f_post %>%
+  filter(is.na(terminate_time) == FALSE)
+
+#write.csv(factorScoreDf_4f_post, here("TimeSeries", "Inputs", "factorScoreDf_4f_post.csv"), row.names = F)
+
+factorScoreDf_6f_post <- factorScoreDf_6f_post %>%
+  filter(is.na(terminate_time) == FALSE) 
+
+#write.csv(factorScoreDf_6f_post, here("TimeSeries", "Inputs", "factorScoreDf_6f_post.csv"), row.names = F)
+```
+
+
+# Dataset Overview
+
+## Longitudinal overview
+### Subject count
+F1: 
+```{r}
+sum(merged_summaryDf$F1_include, na.rm = T)
+sum(merged_summaryDf$F1_include == F, na.rm = T)
+sum(is.na(merged_summaryDf$F1_include))
+```
+F2
+```{r}
+sum(merged_summaryDf$F2_include, na.rm = T)
+sum(merged_summaryDf$F2_include == F, na.rm = T)
+sum(is.na(merged_summaryDf$F2_include))
+```
+F3
+```{r}
+sum(merged_summaryDf$F3_include, na.rm = T)
+sum(merged_summaryDf$F3_include == F, na.rm = T)
+sum(is.na(merged_summaryDf$F3_include))
+```
+Completion
+```{r}
+merged_summaryDf_sub <- merged_summaryDf %>%
+  rowwise() %>%
+  mutate(complete_num = baseline_complete + F1_complete + F2_complete + F3_complete,
+         included_num = baseline_complete + F1_include + F2_include + F3_include) %>%
+  ungroup()
+
+sum(merged_summaryDf_sub$included_num == 4, na.rm = T)
+```
+

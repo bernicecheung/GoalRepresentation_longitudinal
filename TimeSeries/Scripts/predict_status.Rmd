@@ -1,0 +1,825 @@
+---
+title: "predict_status"
+author: "Bernice Cheung"
+date: "8/24/2021"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+```{r libraries, echo=FALSE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(psych)
+library(janitor)
+library(kableExtra)
+library(here)
+library(nnet)
+```
+
+Import all data
+```{r}
+merged_progress_w <- read.csv(here("TimeSeries", "Inputs", "merged_progress_clean_w.csv")) 
+
+factorScore_4f <- read.csv(here("Baseline", "Outputs", "factorScoreDf_4f.csv"))
+factorScore_6f <- read.csv(here("Baseline", "Outputs", "factorScoreDf_6f.csv"))
+
+baseline_goalRep <- read.csv(here("Baseline", "Outputs", "baseline_goalRap.csv"))
+
+factorScore_4f_post <- read.csv(here("TimeSeries", "Inputs", "factorScoreDf_4f_post.csv"))
+factorScore_6f_post <- read.csv(here("TimeSeries", "Inputs", "factorScoreDf_6f_post.csv"))
+```
+
+# Descriptives on the final status
+
+A bar plot of the final status by time and goal type
+```{r}
+merged_progress_w %>%
+  filter(is.na(final_time) == F) %>%
+  ggplot(aes(status_final)) + 
+  geom_bar(aes(fill = status_final)) + 
+  scale_fill_brewer(palette="Set3") + 
+  facet_grid(final_time~goalType) + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+Violin plots for each baseline factor scores by final status (4-factor)
+```{r}
+merged_progress_w %>%
+  filter(is.na(status_final) == F) %>%
+  select(-goalType) %>%
+  left_join(factorScore_4f, by = c("MTurkCode", "goal")) %>%
+  gather(Value : Consensus, key = "baseline_factors", value = "scores") %>%
+  ggplot(aes(fill = status_final, y = scores, x = baseline_factors)) + 
+  geom_violin(position="dodge", alpha=0.5, outlier.colour="transparent")
+```
+
+Violin plots for each baseline factor scores by final status (6-factor)
+```{r}
+merged_progress_w %>%
+  filter(is.na(status_final) == F) %>%
+  select(-goalType) %>%
+  left_join(factorScore_6f, by = c("MTurkCode", "goal")) %>%
+  gather(Value : Instrumentality, key = "baseline_factors", value = "scores") %>%
+  ggplot(aes(fill = status_final, y = scores, x = baseline_factors)) + 
+  geom_violin(position="dodge", alpha=0.5, outlier.colour="transparent")
+```
+
+Violin plots for each final factor scores by final status (4-factor)
+```{r}
+merged_progress_w %>%
+  filter(is.na(status_final) == F) %>%
+  select(-goalType) %>%
+  left_join(factorScore_4f_post, by = c("MTurkCode", "goal")) %>%
+  gather(Value : Consensus, key = "final_factors", value = "scores") %>%
+  ggplot(aes(fill = status_final, y = scores, x = final_factors)) + 
+  geom_violin(position="dodge", alpha=0.5, outlier.colour="transparent")
+```
+
+Violin plots for each final factor scores by final status (6-factor)
+```{r}
+merged_progress_w %>%
+  filter(is.na(status_final) == F) %>%
+  select(-goalType) %>%
+  left_join(factorScore_6f_post, by = c("MTurkCode", "goal")) %>%
+  gather(Value : Instrumentality, key = "final_factors", value = "scores") %>%
+  ggplot(aes(fill = status_final, y = scores, x = final_factors)) + 
+  geom_violin(position="dodge", alpha=0.5, outlier.colour="transparent")
+```
+
+## Notes on the descriptives: 
+The numbers of cases within each groups are very uneven, so the interpretation of the models will be very tricky. From the violin plots, we can see that the factor clarity / attainability show the most variation across the final statuses (consistent with the progress models). We can also see that among the other factors, adjusted goals show some different patterns than the three other types of goals. I'm not sure what would be the best way to deal with these adjusted goals. The count table for hte final status is listed below. We only have 32 goals that were adjusted at their final follow-up but in total 80 goals have been adjusted through out the period. Due to the very small N, the violin plot can be very misleading. To simplify the analysis at this moment, I excluded all the 80 goals that have been adjusted at any given follow-up. I wish we could get more adjusted goals because it would be interesting to see what types of goals were adjusted vs. abandoned. 
+
+```{r}
+table(merged_progress_w$status_final)
+```
+
+
+# Multinomial logistic regression models for final status
+
+## clean datasets
+
+### exclude adjusted goals
+
+80 goals were excluded
+```{r}
+# exclude goals that were adjsuted at any given time
+merged_progress_w_adjust <- merged_progress_w %>%
+  rowwise() %>%
+  mutate(adjust_num = sum(c_across(starts_with("status_F")) == "adjusted", na.rm = T)) %>%
+  filter(adjust_num > 0)
+
+merged_progress_w_clean <- merged_progress_w %>%
+  anti_join(merged_progress_w_adjust, by = c("MTurkCode", "goal"))
+
+#write.csv(merged_progress_w_adjust, "../inputs/merged_progress_w_adjust.csv", row.names = F)
+#write.csv(merged_progress_w_clean, "../inputs/merged_progress_w_no_adj.csv", row.names = F)
+```
+
+### set the reference group
+Make the continued goal (with the largest N) as the reference level of the final status; recurrence (with the largest N) as the reference level of the goal type; and F3 as the reference level of the final time. 
+```{r}
+merged_progress_w_clean$status_final <- as.factor(merged_progress_w_clean$status_final)
+merged_progress_w_clean$status_final <- relevel(merged_progress_w_clean$status_final, ref = "continued")
+
+merged_progress_w_clean$goalType <- as.factor(merged_progress_w_clean$goalType)
+merged_progress_w_clean$goalType <- relevel(merged_progress_w_clean$goalType, ref = "recurrance")
+
+merged_progress_w_clean$final_time <- as.factor(merged_progress_w_clean$final_time)
+merged_progress_w_clean$final_time <- relevel(merged_progress_w_clean$final_time, ref = "F3")
+
+```
+
+
+### exclude rows with missing data across IVs
+
+To ensure that all models have the same N, we only included complete cases across all IVs. 136 rows were excluded. In total, 606 goals were included in the following analysis. 
+```{r}
+merged_4f_base_clean <- merged_progress_w_clean %>%
+  left_join(select(factorScore_4f, - goalType), by = c("MTurkCode", "goal")) %>%
+  drop_na(goalType, final_time, progress_base, Clarity, Value, External, Consensus)
+
+merged_6f_base_clean <- merged_progress_w_clean %>%
+  left_join(select(factorScore_6f, - goalType), by = c("MTurkCode", "goal")) %>%
+  drop_na(goalType, final_time, progress_base, Attainability, Measurability, Value, External, Consensus, Instrumentality)
+```
+
+### count table by groups
+```{r}
+tabyl(merged_4f_base_clean, goalType, status_final, final_time)
+```
+
+## Model 1 (no baseline factor scores)
+
+model 1: using the goal type, the final time and the baseline progress as the predictors
+
+```{r}
+# create a model 
+m1 <- multinom(status_final ~ goalType + final_time + scale(progress_base), data = merged_4f_base_clean)
+```
+
+A summary of the model1
+```{r}
+summary(m1)
+```
+
+use a 2-tailed z test to look at the p value of each level of IV
+```{r}
+m1_z <- summary(m1)$coefficients/summary(m1)$standard.errors
+m1_p <- (1 - pnorm(abs(m1_z), 0, 1)) * 2
+m1_p
+```
+
+Conclusions from model 1:  
+Compared to the recurrence goals, people are more likely to either abandon or complete the short-term goals. In addition, the lower the progress at baseline, the higher the chance for people to abandon the goal. The final time point doesn't affect the final status.  
+
+## Models with the baseline 4-factor scores 
+
+### Model 2 (include baseline Clarity)
+
+model 2: Adding baseline clarity factor score to model 1
+```{r}
+# create a model 
+m2 <- multinom(status_final ~ goalType + final_time + scale(progress_base) + scale(Clarity), data = merged_4f_base_clean)
+```
+
+A summary of the model 2
+```{r}
+summary(m2)
+```
+Plot the predicted probabilities of the clarity factor across goal types at F3 when holding the baseline progress at its mean. 
+
+```{r}
+# Generate the predicted probabilities
+m2_clarity <- data.frame(goalType = c("short-term", "recurrance", "long-term"), Clarity = rep(c(1:7), 3), final_time = "F3", progress_base = mean(merged_4f_base_clean$progress_base))
+
+# generate the pp dataframe
+m2_pp <- cbind(m2_clarity, predict(m2, newdata = m2_clarity, type = "probs", se = TRUE))
+
+# transform to long format and plot the probability across goal types 
+m2_pp %>% 
+  gather(continued: completed, key = "final_status", value = "probability") %>%
+  ggplot(aes(x = Clarity, y = probability, colour = goalType)) + 
+  geom_line() + 
+  facet_grid(final_status ~ ., scales = "free")
+```
+
+From this plot, we can tell that the effect of clarity is the strongest among short-term goals. As the clarity increase, the probability of completing the goals goes up and the probability of continuing the goals goes down. Because short-term goals are the goals that should be completed at F3, and final status "continued" can also be interpreted as haven't completed on time.  
+
+### A comparison between model 1 & 2
+
+The anova test showed that the chi-square is 12.22 and the p = .002, so including the baseline clarity factor score improves the model fit. 
+```{r}
+anova(m1,m2) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### model 3 (include baseline Clarity + Value)
+
+```{r}
+# create a model 
+m3 <- multinom(status_final ~ goalType + final_time + scale(progress_base) + scale(Clarity) + scale(Value),data = merged_4f_base_clean)
+```
+
+```{r}
+summary(m3)
+```
+
+### A comparison between model 2 & 3
+
+The anova test showed that the chi-square is 12.22 and the p = .002, so adding the baseline value factor score improves the model fit. 
+```{r}
+anova(m2,m3) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+
+### model 4 (include baseline Clarity + Value + Consensus)
+
+```{r}
+# create a model 
+m4 <- multinom(status_final ~ goalType + final_time + scale(progress_base) + scale(Clarity) + scale(Value) + Consensus,data = merged_4f_base_clean)
+```
+
+```{r}
+summary(m4)
+```
+
+### A comparison between model 3 & 4
+
+The anova test showed that the chi-square is 2.91 and the p = .23, so adding the baseline consensus factor score doesn't improve the model fit. 
+```{r}
+anova(m3,m4) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### model 5 (including baseline clarity, value and external)
+
+```{r}
+# create a model 
+m5 <- multinom(status_final ~ goalType + final_time + scale(progress_base) + scale(Clarity) + scale(Value) + scale(External),data = merged_4f_base_clean)
+```
+
+```{r}
+summary(m5)
+```
+
+### A comparison between model 3 & 5
+
+The anova test showed that the chi-square is 3.26 and the p = .20, so adding the baseline external factor score doesn't improve the model fit. 
+```{r}
+anova(m3,m5) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### The final model that inlcudes the baseline factor scores
+
+After model comparisons, model 3 (including both the baseline clarity and value) fit the best. 
+
+## Models with the baseline 6-factor scores 
+
+### Model 6 (include baseline Attainability)
+
+model 6: Adding baseline attainability factor score to model 1
+```{r}
+# create a model 
+m6 <- multinom(status_final ~ goalType + final_time + scale(progress_base) + scale(Attainability), data = merged_6f_base_clean)
+```
+
+A summary of the model 2
+```{r}
+summary(m6)
+```
+
+### A comparison between model 1 & 6
+
+The anova test showed that the chi-square is 12.48 and the p = .002, so including the baseline attainability factor score improves the model fit. 
+```{r}
+anova(m1,m6) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### model 7 (include baseline Attainability + Measurability)
+
+```{r}
+# create a model 
+m7 <- multinom(status_final ~ goalType + final_time + scale(progress_base) + scale(Attainability) + scale(Measurability),data = merged_6f_base_clean)
+```
+
+```{r}
+summary(m7)
+```
+
+### A comparison between model 6 & 7
+
+The anova test showed that the chi-square is 4.62 and the p = .1, so including the baseline measurability factor score doesn't improve the model fit. 
+```{r}
+anova(m6,m7) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+
+### model 8 (include baseline Attainability + Value)
+
+```{r}
+# create a model 
+m8 <- multinom(status_final ~ goalType + final_time + scale(progress_base) + scale(Attainability) + scale(Value) ,data = merged_6f_base_clean)
+```
+
+```{r}
+summary(m8)
+```
+
+### A comparison between model 6 & 8
+
+The anova test showed that the chi-square is 7.61 and the p = .02, so adding the baseline value factor score improves the model fit. 
+```{r}
+anova(m6,m8) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### model 9 (including baseline Attainability, Value, External)
+
+```{r}
+# create a model 
+m9 <- multinom(status_final ~ goalType + final_time + scale(progress_base) + scale(Attainability) + scale(Value) + scale(External),data = merged_6f_base_clean)
+```
+
+```{r}
+summary(m9)
+```
+
+### A comparison between model 8 & 9
+
+The anova test showed that the chi-square is 2.20 and the p = .33, so adding the baseline external factor score doesn't improve the model fit. 
+```{r}
+anova(m8,m9) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+### The final model that includes the basleine 6-factor scores
+
+After model comparisons, model 8 (including baseline attainability and value) has the best model fit. 
+
+## Interpretations of the final models: 
+
+### model 3 (Clarity + Value from the 4-factor model)
+
+A summary of the model
+```{r}
+summary(m3)
+```
+
+use a 2-tailed z test to look at the p value of each level of IV
+```{r}
+m3_z <- summary(m3)$coefficients/summary(m3)$standard.errors
+m3_p <- (1 - pnorm(abs(m3_z), 0, 1)) * 2
+
+m3_p %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+Transform the coefficients to odds ratio
+```{r}
+exp(coef(m3)) %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+This model shows that after controlling for baseline progress, when increase 1 unit in baseline Clarity factor score, the odds ratio of completing the goal vs. continuing the goals becomes 1.51 times as high as before and when increase 1 unit in the baseline value score, the odds ratio of abandoning the goals vs. continuing the goals becomes 0.63 times as high as before. 
+
+
+#### check the predictions of the model: 
+
+The predicted probability plot: 
+
+1. The predicted probability of clarity at F3 while holding the baseline progress and value at their mean
+
+```{r}
+# Generate the predicted probabilities
+m3_clarity <- data.frame(goalType = c("short-term", "recurrance", "long-term"), Clarity = rep(c(1:7), 3), final_time = "F3", progress_base = mean(merged_4f_base_clean$progress_base), Value = mean(merged_4f_base_clean$Value))
+
+# generate the pp dataframe
+m3_pp <- cbind(m3_clarity, predict(m3, newdata = m3_clarity, type = "probs", se = TRUE))
+
+# transform to long format and plot the probability across goal types 
+m3_pp %>% 
+  gather(continued: completed, key = "final_status", value = "probability") %>%
+  ggplot(aes(x = Clarity, y = probability, colour = goalType)) + 
+  geom_line() + 
+  facet_grid(final_status ~ ., scales = "free")
+```
+
+2. The predicted probability of value at F3 while holding the baseline progress and clarity at their mean
+
+```{r}
+# Generate the predicted probabilities
+m3_value <- data.frame(goalType = c("short-term", "recurrance", "long-term"), Value = rep(c(1:7), 3), final_time = "F3", progress_base = mean(merged_4f_base_clean$progress_base), Clarity = mean(merged_4f_base_clean$Clarity))
+
+# generate the pp dataframe
+m3_pp <- cbind(m3_value, predict(m3, newdata = m3_value, type = "probs", se = TRUE))
+
+# transform to long format and plot the probability across goal types 
+m3_pp %>% 
+  gather(continued: completed, key = "final_status", value = "probability") %>%
+  ggplot(aes(x = Value, y = probability, colour = goalType)) + 
+  geom_line() + 
+  facet_grid(final_status ~ ., scales = "free")
+```
+
+Putting these two plots together, Clarity mostly affect whether people completed the goals and Value mostly affect whehter people continue to pursuit or abandon their goals when they don't complete them on time. 
+
+Goodness to fit
+```{r}
+chisq.test(merged_4f_base_clean$status_final,predict(m3), simulate.p.value = TRUE)
+```
+classification table
+```{r}
+classDF <- data.frame(response = merged_4f_base_clean$status_final, predicted = predict(m3))
+xtabs(~ predicted + response, data = classDF)
+```
+
+The model doesn't predict the abandoned or completed goals very well, probabily because of the lack of cases under these categories. 
+
+### model 8 (Attainability + Value from the 6 factor model)
+
+A summary of the model
+```{r}
+summary(m8)
+```
+
+use a 2-tailed z test to look at the p value of each level of IV
+```{r}
+m8_z <- summary(m8)$coefficients/summary(m8)$standard.errors
+m8_p <- (1 - pnorm(abs(m8_z), 0, 1)) * 2
+
+m8_p %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+Transform the coefficients to odds ratio
+```{r}
+exp(coef(m8)) %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+This model shows that after controlling for baseline progress, when increase 1 unit in baseline Clarity factor score, the odds ratio of completing the goal vs. continuing the goals becomes 1.4 times as high as before and when increase 1 unit in the baseline value score, the odds ratio of abandoning the goals vs. continuing hte goals becomes 0.65 times as high as before. 
+
+### Compare the 2 final models: 
+
+```{r}
+anova(m3,m8)
+```
+
+
+#### check the prediction of the model: 
+
+1. The predicted probability of attainability at F3 while holding the baseline progress and value at their mean
+
+```{r}
+# Generate the predicted probabilities
+m8_attainability <- data.frame(goalType = c("short-term", "recurrance", "long-term"), Attainability = rep(c(1:7), 3), final_time = "F3", progress_base = mean(merged_6f_base_clean$progress_base), Value = mean(merged_6f_base_clean$Value))
+
+# generate the pp dataframe
+m8_pp_attain <- cbind(m8_attainability, predict(m8, newdata = m8_attainability, type = "probs", se = TRUE))
+
+# transform to long format and plot the probability across goal types 
+m8_pp_attain %>% 
+  gather(continued: completed, key = "final_status", value = "probability") %>%
+  ggplot(aes(x = Attainability, y = probability, colour = goalType)) + 
+  geom_line() + 
+  facet_grid(final_status ~ ., scales = "free")
+
+#write.csv(m8, here("TimeSeries", "Outputs", "m8.csv"), row.names = F)
+write.csv(m8_attainability, here("TimeSeries", "Outputs", "m8_attainability.csv"), row.names = F)
+write.csv(m8_pp_attain, here("TimeSeries", "Outputs", "m8_pp_attain.csv"), row.names = F)
+```
+
+2. The predicted probability of value at F3 while holding the baseline progress and attainability at their mean
+
+```{r}
+# Generate the predicted probabilities
+m8_value <- data.frame(goalType = c("short-term", "recurrance", "long-term"), Value = rep(c(1:7), 3), final_time = "F3", progress_base = mean(merged_6f_base_clean$progress_base), Attainability = mean(merged_6f_base_clean$Attainability))
+
+# generate the pp dataframe
+m8_pp_value <- cbind(m8_value, predict(m8, newdata = m8_value, type = "probs", se = TRUE))
+
+# transform to long format and plot the probability across goal types 
+m8_pp_value %>% 
+  gather(continued: completed, key = "final_status", value = "probability") %>%
+  ggplot(aes(x = Value, y = probability, colour = goalType)) + 
+  geom_line() + 
+  facet_grid(final_status ~ ., scales = "free")
+
+write.csv(m8_value, here("TimeSeries", "Outputs", "m8_value.csv"), row.names = F)
+write.csv(m8_pp_value, here("TimeSeries", "Outputs", "m8_pp_value.csv"), row.names = F)
+```
+
+These are very similar to those with the 4-factor model except that value fail to predict abandoned goals when clarity at its mean. 
+
+
+Goodness to fit
+```{r}
+chisq.test(merged_4f_base_clean$status_final,predict(m8), simulate.p.value = TRUE)
+```
+classification table
+```{r}
+classDF <- data.frame(response = merged_4f_base_clean$status_final, predicted = predict(m8))
+xtabs(~ predicted + response, data = classDF)
+```
+
+The results are very similar to model 3. 
+
+# Multinormial logistic regression models among short-term goals
+
+The uneven cases across groups always hinder the model performance for both the mlm models and the multinomial model. Therefore, it may be interesting to focus only on the short-term goals which has a slightly more even numbers of cases across the final status. These are the goals that people anticipate to coomplete within the 3-month, so it would be interesting to see if any baseline factors predict whether people abandoned the goals or continue to pursuit the goals if they didn't complete them on time.  
+
+## Descriptives
+
+```{r}
+# subset the datasets for short-term goals 
+merged_4f_base_st <- merged_4f_base_clean %>% filter(goalType == "short-term")
+merged_6f_base_st <- merged_6f_base_clean %>% filter(goalType == "short-term")
+```
+
+a count table
+```{r}
+tabyl(merged_4f_base_st, final_time, status_final)
+```
+
+The status "continued" occurs almost exclusively at F3. 
+
+```{r}
+merged_4f_base_st %>%
+  gather(Value : Consensus, key = "baseline_factors", value = "scores") %>%
+  ggplot(aes(fill = status_final, y = scores, x = baseline_factors)) + 
+  geom_violin(position="dodge", alpha=0.5, outlier.colour="transparent")
+```
+
+```{r}
+merged_6f_base_st %>%
+  gather(Value : Instrumentality, key = "baseline_factors", value = "scores") %>%
+  ggplot(aes(fill = status_final, y = scores, x = baseline_factors)) + 
+  geom_violin(position="dodge", alpha=0.5, outlier.colour="transparent")
+```
+The violin plots are similar to the ones that include all the goals. The 6-factor model plot shows slightly more variations across the final statuses.
+
+## Model s1 (no baseline factor scores)
+
+For all following models, the completed goal is the reference group. 
+
+```{r}
+# set the reference group: 
+merged_4f_base_st$status_final <- relevel(merged_4f_base_st$status_final, ref = "completed")
+merged_6f_base_st$status_final <- relevel(merged_6f_base_st$status_final, ref = "completed")
+```
+
+```{r}
+# create a model 
+s1 <- multinom(status_final ~ final_time + progress_base, data = merged_4f_base_st)
+```
+```{r}
+summary(s1)
+```
+```{r}
+s1_z <- summary(s1)$coefficients/summary(s1)$standard.errors
+s1_p <- (1 - pnorm(abs(s1_z), 0, 1)) * 2
+s1_p
+```
+
+The baseline progress is not a significant predictor, which is different from those including all the goals. 
+
+## Model s2 (only include the final timepoint)
+```{r}
+# create a model 
+s2 <- multinom(status_final ~ final_time, data = merged_4f_base_st)
+summary(s2)
+```
+## comparison between s1 & s2
+```{r}
+anova(s1, s2)
+```
+
+including the baseline progress does not improve the model fit. 
+
+## Model s2.1 (only include the baseline progress)
+```{r}
+# create a model 
+s2.1 <- multinom(status_final ~ progress_base, data = merged_4f_base_st)
+summary(s2.1)
+```
+
+```{r}
+s2.1_z <- summary(s2.1)$coefficients/summary(s2.1)$standard.errors
+s2.1_p <- (1 - pnorm(abs(s2.1_z), 0, 1)) * 2
+s2.1_p
+```
+
+The baseline progress doesn't predict the fianl status at F3 either. 
+
+## Models with the baseline 4-factor scores
+
+### Model s3 (includes final_time +  clarity)
+
+```{r}
+s3 <- multinom(status_final ~ final_time + Clarity, data = merged_4f_base_st)
+summary(s3)
+```
+```{r}
+anova(s2,s3)
+```
+The anova test showed that the chi-square is 5.9 and the p = .05, so including the baseline clarity factor score improves (marginally) the model fit.
+
+
+```{r}
+s3_z <- summary(s3)$coefficients/summary(s3)$standard.errors
+s3_p <- (1 - pnorm(abs(s3_z), 0, 1)) * 2
+s3_p
+```
+
+### Model s4 (include final time, clarity, value)
+```{r}
+s4 <- multinom(status_final ~ final_time + Clarity + Value, data = merged_4f_base_st)
+summary(s4)
+```
+
+```{r}
+anova(s3,s4)
+```
+The anova test showed that the chi-square is 2.76 and the p = .25, so including the baseline value factor score doesn't improve the model fit.
+
+
+
+### Model s3.1 (includes baseline_progross as a covariate)
+
+```{r}
+s3.1 <- multinom(status_final ~ final_time + Clarity + progress_base, data = merged_4f_base_st)
+summary(s3.1)
+```
+```{r}
+s3.1_z <- summary(s3.1)$coefficients/summary(s3.1)$standard.errors
+s3.1_p <- (1 - pnorm(abs(s3.1_z), 0, 1)) * 2
+s3.1_p
+```
+
+## Models with the 6-factor scores
+
+### Model s5 (includes final_time +  Attainability)
+
+```{r}
+s5 <- multinom(status_final ~ final_time + Attainability, data = merged_6f_base_st)
+summary(s5)
+```
+
+```{r}
+anova(s2,s5)
+```
+The anova test showed that the chi-square is 7.36 and the p = .03, so including the baseline attainability factor score improves the model fit.
+
+```{r}
+s5_z <- summary(s5)$coefficients/summary(s5)$standard.errors
+s5_p <- (1 - pnorm(abs(s5_z), 0, 1)) * 2
+s5_p
+```
+
+### Model s6 (includes final_time +  Attainability + Value)
+
+```{r}
+s6 <- multinom(status_final ~ final_time + Attainability + Value, data = merged_6f_base_st)
+summary(s6)
+```
+
+```{r}
+anova(s5,s6)
+```
+
+The anova test showed that the chi-square is 3.21 and the p = .2, so including the baseline value factor score doesn't improve the model fit. I also tried adding the rest of the factor scores and none of these scores improve the model fit. 
+
+## Interpret the final models
+
+### The final model including clarity from the 4-factor model
+
+Adding the baseline progress as the covariate to the model
+```{r}
+s3.1 <- multinom(status_final ~ final_time + Clarity + progress_base, data = merged_4f_base_st)
+summary(s3.1)
+```
+
+use a 2-tailed z test to look at the p value of each level of IV
+```{r}
+s3.1_z <- summary(s3.1)$coefficients/summary(s3.1)$standard.errors
+s3.1_p <- (1 - pnorm(abs(s3.1_z), 0, 1)) * 2
+s3.1_p
+```
+
+transform the coefficients to odd ratios 
+```{r}
+exp(coef(s3.1))
+```
+
+This model shows that after controlling for baseline progress, when increase 1 unit in baseline Clarity factor score, the odds ratio of abandoning the goal versis completing the goal becomes 0.5 times as before.
+
+#### check the prediction of the model 
+
+Plot the predicted probabilities of the clarity factor across follow-ups when holding the baseline progress at its mean.
+```{r}
+# Generate the predicted probabilities
+s3.1_clarity <- data.frame(Clarity = rep(c(1:7), 3), final_time = c("F1","F2","F3"), progress_base = mean(merged_4f_base_st$progress_base))
+
+# generate the pp dataframe
+s3.1_pp <- cbind(s3.1_clarity, predict(s3.1, newdata = s3.1_clarity, type = "probs", se = TRUE))
+
+# transform to long format and plot the probability across goal types 
+s3.1_pp %>% 
+  gather(continued: completed, key = "final_status", value = "probability") %>%
+  ggplot(aes(x = Clarity, y = probability, colour = final_time)) + 
+  geom_line() + 
+  facet_grid(final_status ~ ., scales = "free")
+```
+
+The main issue of using only the short-term goals in the model is that the model failed to predict abandoned goals (also see the classification table). We have too few cases.Also, from the figure we can see taht the effect of clarity are the strongest for completed goals at F1 & F2. These are the goals that are completed on time or every earlier than the plan.  
+
+```{r}
+chisq.test(merged_4f_base_st$status_final,predict(s3.1), simulate.p.value = TRUE)
+```
+```{r}
+classDF <- data.frame(response = merged_4f_base_st$status_final, predicted = predict(s3.1))
+xtabs(~ predicted + response, data = classDF)
+```
+
+The model does a very poor job predicting abandoned goals. 
+
+
+### The final model including clarity from the 6-factor model
+
+Adding the baseline progress as the covariate to the model
+```{r}
+s5.1 <- multinom(status_final ~ final_time + Attainability + progress_base, data = merged_6f_base_st)
+summary(s5.1)
+```
+
+use a 2-tailed z test to look at the p value of each level of IV
+```{r}
+s5.1_z <- summary(s5.1)$coefficients/summary(s5.1)$standard.errors
+s5.1_p <- (1 - pnorm(abs(s5.1_z), 0, 1)) * 2
+s5.1_p
+```
+
+transform the coefficients to odd ratios 
+```{r}
+exp(coef(s5.1))
+```
+
+This model shows that after controlling for baseline progress, when increase 1 unit in baseline Clarity factor score, the odds ratio of abandoning the goal versis completing the goal becomes 0.57 times as before.
+
+#### check the prediction of the model 
+
+Plot the predicted probabilities of the attainability factor across follow-ups when holding the baseline progress at its mean.
+```{r}
+# Generate the predicted probabilities
+s5.1_clarity <- data.frame(Attainability = rep(c(1:7), 3), final_time = c("F1","F2","F3"), progress_base = mean(merged_4f_base_st$progress_base))
+
+# generate the pp dataframe
+s5.1_pp <- cbind(s5.1_clarity, predict(s5.1, newdata = s5.1_clarity, type = "probs", se = TRUE))
+
+# transform to long format and plot the probability across goal types 
+s5.1_pp %>% 
+  gather(continued: completed, key = "final_status", value = "probability") %>%
+  ggplot(aes(x = Attainability, y = probability, colour = final_time)) + 
+  geom_line() + 
+  facet_grid(final_status ~ ., scales = "free")
+```
+
+Compared to the model with Clarity, the probability of the final status at F3 vary more. 
+
+```{r}
+chisq.test(merged_6f_base_st$status_final,predict(s5.1), simulate.p.value = TRUE)
+```
+
+```{r}
+classDF <- data.frame(response = merged_6f_base_st$status_final, predicted = predict(s5.1))
+xtabs(~ predicted + response, data = classDF)
+```
+
+The results from the 6-factor model are very similar to those from the 4-factor model. 
+
+### Compare the two final model
+
+```{r}
+anova(s3.1, s5.1)
+```
+

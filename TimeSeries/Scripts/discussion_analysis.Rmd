@@ -1,0 +1,507 @@
+---
+title: "discussion_analysis"
+author: "Bernice Cheung"
+date: "3/24/2022"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r library, warning=FALSE}
+library(tidyverse)
+library(psych)
+library(ggplot2)
+library(knitr)
+library(janitor)
+library(kableExtra)
+library(here)
+library(nFactors)
+library(GPArotation)
+```
+
+load data
+```{r}
+full_df <- read.csv(here("TimeSeries", "Outputs", "longitudinal_merged_allTime_w.csv"))
+```
+
+# Bivariate scatter plots
+
+bivariate scatter plot between based factor scores and final progress
+```{r}
+full_df %>%
+  select(Value_4f: Instrumentality_6f, progress_final) %>%
+  gather(factor, value, -progress_final) %>%
+  ggplot(aes(value, progress_final)) + 
+  geom_point() + 
+  stat_smooth(method = "lm") + 
+  facet_wrap(. ~ factor, ncol = 2)
+```
+
+Histogram on factor scores
+```{r}
+full_df %>%
+  select(Value_4f: Instrumentality_6f, progress_final) %>%
+  gather(factor, value, -progress_final) %>%
+  ggplot(aes(x = value)) +
+  geom_histogram(fill   = "orange",
+                 colour = "black",
+                 alpha  = .6) + 
+  facet_wrap(. ~ factor, ncol = 2)
+```
+
+# Multivariate outlier comparisons
+
+## mTurk Longitudinal Baseline
+
+### outlier detection
+
+load the data
+```{r}
+baseline_EFA_raw <- read.csv(here("Baseline", "Outputs", "baseline_EFA_raw.csv"))
+
+```
+
+Detect outliers and generate a cleaned dataset
+```{r}
+# Finding the center point 
+baseline_EFA_center  = colMeans(baseline_EFA_raw, na.rm = T)
+# Finding the covariance matrix
+baseline_EFA_cov <- cov(baseline_EFA_raw, use = "pairwise")
+# Finding distances
+distances <- mahalanobis(x = baseline_EFA_raw , center = baseline_EFA_center , cov = baseline_EFA_cov)
+
+# Cutoff value for ditances from Chi-Sqaure Dist. 
+# with p = 0.95 df = 2 which in ncol(air)
+cutoff <- qchisq(p = 0.95 , df = ncol(baseline_EFA_raw))
+
+# keep rows with NA in the dataset
+cleanIdx <- distances < cutoff
+cleanIdx[is.na(cleanIdx)] <- TRUE
+
+# Generate a cleaned dataset after excluding outliers
+baseline_EFA_clean <- baseline_EFA_raw[cleanIdx,]
+```
+
+### EFA on cleaned dataset
+
+```{r}
+# Generate a correctional matrix 
+corrM_clean <- cor(baseline_EFA_clean, use = "pairwise")
+
+# use Very Simple Structure criterion
+res_vss <- psych :: nfactors(corrM_clean, n = 10, rotate = "promax", diagonal = FALSE, fm = "minres", 
+n.obs=724,title="Very Simple Structure",use="pairwise",cor="cor")
+
+# select useful parameters and organize them into a table
+cbind(1:10, res_vss$map) %>%
+  as_tibble() %>%
+  rename(., factor = V1, map = V2) %>%
+  cbind(., res_vss$vss.stats) %>%
+  select(factor, map, fit, complex, eChisq, SRMR, eCRMS, eBIC, eRMS) %>%
+  kable(format = "html", escape = F, caption = "VSS output -mTurk") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+
+```
+
+```{r}
+# Use the Scree plot to identify the number of factors have Eigenvalues >1 and the output from the Parallel analysis
+
+ev <- eigen(corrM_clean)
+ap <- parallel(subject=nrow(baseline_EFA_clean),var=ncol(baseline_EFA_clean),
+  rep=100,cent=.05)
+nS <- nScree(x=ev$values, aparallel=ap$eigen$qevpea)
+plotnScree(nS)
+```
+
+Extract 4 factors
+```{r}
+# extract 4 factors
+fa_new_4 <-fa(r=corrM_clean, nfactors=4,n.obs = 749, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+
+```{r}
+fa.diagram(fa_new_4)
+```
+
+```{r}
+# visualization
+loadings <- fa.sort(fa_new_4)$loadings
+loadings <- as.data.frame(unclass(loadings))
+colnames(loadings) <- c("Value","Clarity", "External", "Consensus")
+loadings$Items <- rownames(loadings)
+loadings.m <- loadings %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("Value","Clarity", "External", "Consensus")
+rowOrder <- rev(rownames(loadings))
+loadings.m<- arrange(mutate(loadings.m,Items=factor(Items,leve=rowOrder)),Items)
+loadings.m<- arrange(mutate(loadings.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(loadings.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Four Factor Solution from mTurk baseline cleaned dataset") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+
+```{r}
+baseline_fit_f4 <- data.frame(sample = "mTurk baseline", factors = 4, items = 26, observation = 749, chi = fa_new_4$chi, BIC = fa_new_4$BIC, fit = fa_new_4$fit, RMSEA = fa_new_4$RMSEA[1], cumVar = max(fa_new_4$Vaccounted[3,]), complexity = mean(fa_new_4$complexity)) %>%
+  remove_rownames()
+```
+
+Extract 6 factors
+```{r}
+# extract 6 factors
+fa_new_6 <-fa(r=corrM_clean, nfactors=6,n.obs = 749, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+
+```{r}
+fa.diagram(fa_new_6)
+```
+
+```{r}
+# visualization
+loadings <- fa.sort(fa_new_6)$loadings
+loadings <- as.data.frame(unclass(loadings))
+colnames(loadings) <- c("Value","External", "Attainability", "Instrumentality", "Consensus", "measurability")
+loadings$Items <- rownames(loadings)
+loadings.m <- loadings %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("Value","External", "Attainability", "Instrumentality", "Consensus", "measurability")
+rowOrder <- rev(rownames(loadings))
+loadings.m<- arrange(mutate(loadings.m,Items=factor(Items,leve=rowOrder)),Items)
+loadings.m<- arrange(mutate(loadings.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(loadings.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Six Factor Solution from mTurk baseline cleaned dataset") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+
+```{r}
+baseline_fit_f6 <- data.frame(sample = "mTurk baseline", factors = 6, items = 26, observation = 749, chi = fa_new_6$chi, BIC = fa_new_6$BIC, fit = fa_new_6$fit, RMSEA = fa_new_6$RMSEA[1], cumVar = max(fa_new_6$Vaccounted[3,]), complexity = mean(fa_new_6$complexity)) %>%
+  remove_rownames()
+```
+
+## mTurk 2
+
+### outlier detection
+
+load the data
+```{r}
+mTurk2_EFA_raw <- read.csv(here("Baseline", "Inputs", "mTurk2_EFA_raw.csv"))
+
+```
+
+Detect outliers and generate a cleaned dataset
+```{r}
+# Finding the center point 
+mTurk2_EFA_center  = colMeans(mTurk2_EFA_raw, na.rm = T)
+# Finding the covariance matrix
+mTurk2_EFA_cov <- cov(mTurk2_EFA_raw, use = "pairwise")
+# Finding distances
+distances <- mahalanobis(x = mTurk2_EFA_raw , center = mTurk2_EFA_center , cov = mTurk2_EFA_cov)
+
+# Cutoff value for ditances from Chi-Sqaure Dist. 
+# with p = 0.95 df = 2 which in ncol(air)
+cutoff <- qchisq(p = 0.95 , df = ncol(mTurk2_EFA_raw))
+
+# keep rows with NA in the dataset
+cleanIdx <- distances < cutoff
+cleanIdx[is.na(cleanIdx)] <- TRUE
+
+# Generate a cleaned dataset after excluding outliers
+mTurk2_EFA_clean <- mTurk2_EFA_raw[cleanIdx,]
+```
+
+### EFA on cleaned dataset
+
+```{r}
+# Generate a correctional matrix 
+corrM_clean <- cor(mTurk2_EFA_clean, use = "pairwise")
+
+# use Very Simple Structure criterion
+res_vss <- psych :: nfactors(corrM_clean, n = 10, rotate = "promax", diagonal = FALSE, fm = "minres", 
+n.obs=724,title="Very Simple Structure",use="pairwise",cor="cor")
+
+# select useful parameters and organize them into a table
+cbind(1:10, res_vss$map) %>%
+  as_tibble() %>%
+  rename(., factor = V1, map = V2) %>%
+  cbind(., res_vss$vss.stats) %>%
+  select(factor, map, fit, complex, eChisq, SRMR, eCRMS, eBIC, eRMS) %>%
+  kable(format = "html", escape = F, caption = "VSS output -mTurk") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+
+```
+
+```{r}
+# Use the Scree plot to identify the number of factors have Eigenvalues >1 and the output from the Parallel analysis
+
+ev <- eigen(corrM_clean)
+ap <- parallel(subject=nrow(mTurk2_EFA_clean),var=ncol(mTurk2_EFA_clean),
+  rep=100,cent=.05)
+nS <- nScree(x=ev$values, aparallel=ap$eigen$qevpea)
+plotnScree(nS)
+```
+
+Extract 4 factors
+```{r}
+# extract 4 factors
+fa_new_4 <-fa(r=corrM_clean, nfactors=4,n.obs = 591, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+
+```{r}
+fa.diagram(fa_new_4)
+```
+
+```{r}
+# visualization
+loadings <- fa.sort(fa_new_4)$loadings
+loadings <- as.data.frame(unclass(loadings))
+colnames(loadings) <- c("External","Value", "Clarity", "Consensus")
+loadings$Items <- rownames(loadings)
+loadings.m <- loadings %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("External","Value", "Clarity", "Consensus")
+rowOrder <- rev(rownames(loadings))
+loadings.m<- arrange(mutate(loadings.m,Items=factor(Items,leve=rowOrder)),Items)
+loadings.m<- arrange(mutate(loadings.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(loadings.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Four Factor Solution from mTurk2 cleaned dataset") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+
+```{r}
+mTurk2_fit_f4 <- data.frame(sample = "mTurk2", factors = 4, items = 26, observation = 591, chi = fa_new_4$chi, BIC = fa_new_4$BIC, fit = fa_new_4$fit, RMSEA = fa_new_4$RMSEA[1], cumVar = max(fa_new_4$Vaccounted[3,]), complexity = mean(fa_new_4$complexity)) %>%
+  remove_rownames()
+```
+
+Extract 6 factors
+```{r}
+# extract 6 factors
+fa_new_6 <-fa(r=corrM_clean, nfactors=6,n.obs = 591, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+
+```{r}
+fa.diagram(fa_new_6)
+```
+
+```{r}
+# visualization
+loadings <- fa.sort(fa_new_6)$loadings
+loadings <- as.data.frame(unclass(loadings))
+colnames(loadings) <- c("External Motive","Value", "Attainability", "Consensus", "Measurability", "External Perspective")
+loadings$Items <- rownames(loadings)
+loadings.m <- loadings %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("External Motive","Value", "Attainability", "Consensus", "Measurability", "External Perspective")
+rowOrder <- rev(rownames(loadings))
+loadings.m<- arrange(mutate(loadings.m,Items=factor(Items,leve=rowOrder)),Items)
+loadings.m<- arrange(mutate(loadings.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(loadings.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Six Factor Solution from mTurk mTurk2 cleaned dataset") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+
+```{r}
+mTurk2_fit_f6 <- data.frame(sample = "mTurk2", factors = 6, items = 26, observation = 591, chi = fa_new_6$chi, BIC = fa_new_6$BIC, fit = fa_new_6$fit, RMSEA = fa_new_6$RMSEA[1], cumVar = max(fa_new_6$Vaccounted[3,]), complexity = mean(fa_new_6$complexity)) %>%
+  remove_rownames()
+```
+
+## SONA2
+
+### outlier detection
+
+load the data
+```{r}
+SONA2_EFA_raw <- read.csv(here("Baseline", "Inputs", "SONA2_EFA_raw.csv"))
+
+```
+
+Detect outliers and generate a cleaned dataset
+```{r}
+# Finding the center point 
+SONA2_EFA_center  = colMeans(SONA2_EFA_raw, na.rm = T)
+# Finding the covariance matrix
+SONA2_EFA_cov <- cov(SONA2_EFA_raw, use = "pairwise")
+# Finding distances
+distances <- mahalanobis(x = SONA2_EFA_raw , center = SONA2_EFA_center , cov = SONA2_EFA_cov)
+
+# Cutoff value for ditances from Chi-Sqaure Dist. 
+# with p = 0.95 df = 2 which in ncol(air)
+cutoff <- qchisq(p = 0.95 , df = ncol(SONA2_EFA_raw))
+
+# keep rows with NA in the dataset
+cleanIdx <- distances < cutoff
+cleanIdx[is.na(cleanIdx)] <- TRUE
+
+# Generate a cleaned dataset after excluding outliers
+SONA2_EFA_clean <- SONA2_EFA_raw[cleanIdx,]
+```
+
+### EFA on cleaned dataset
+
+```{r}
+# Generate a correctional matrix 
+corrM_clean <- cor(SONA2_EFA_clean, use = "pairwise")
+
+# use Very Simple Structure criterion
+res_vss <- psych :: nfactors(corrM_clean, n = 10, rotate = "promax", diagonal = FALSE, fm = "minres", 
+n.obs=724,title="Very Simple Structure",use="pairwise",cor="cor")
+
+# select useful parameters and organize them into a table
+cbind(1:10, res_vss$map) %>%
+  as_tibble() %>%
+  rename(., factor = V1, map = V2) %>%
+  cbind(., res_vss$vss.stats) %>%
+  select(factor, map, fit, complex, eChisq, SRMR, eCRMS, eBIC, eRMS) %>%
+  kable(format = "html", escape = F, caption = "VSS output -mTurk") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+
+```
+
+```{r}
+# Use the Scree plot to identify the number of factors have Eigenvalues >1 and the output from the Parallel analysis
+
+ev <- eigen(corrM_clean)
+ap <- parallel(subject=nrow(SONA2_EFA_clean),var=ncol(SONA2_EFA_clean),
+  rep=100,cent=.05)
+nS <- nScree(x=ev$values, aparallel=ap$eigen$qevpea)
+plotnScree(nS)
+```
+
+Extract 4 factors
+```{r}
+# extract 4 factors
+fa_new_4 <-fa(r=corrM_clean, nfactors=4,n.obs = 768, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+
+```{r}
+fa.diagram(fa_new_4)
+```
+
+```{r}
+# visualization
+loadings <- fa.sort(fa_new_4)$loadings
+loadings <- as.data.frame(unclass(loadings))
+colnames(loadings) <- c("Value","External", "Clarity", "Consensus")
+loadings$Items <- rownames(loadings)
+loadings.m <- loadings %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("Value","External", "Clarity", "Consensus")
+rowOrder <- rev(rownames(loadings))
+loadings.m<- arrange(mutate(loadings.m,Items=factor(Items,leve=rowOrder)),Items)
+loadings.m<- arrange(mutate(loadings.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(loadings.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Four Factor Solution from SONA2 cleaned dataset") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+
+```{r}
+SONA2_fit_f4 <- data.frame(sample = "SONA2", factors = 4, items = 26, observation = 768, chi = fa_new_4$chi, BIC = fa_new_4$BIC, fit = fa_new_4$fit, RMSEA = fa_new_4$RMSEA[1], cumVar = max(fa_new_4$Vaccounted[3,]), complexity = mean(fa_new_4$complexity)) %>%
+  remove_rownames()
+```
+
+Extract 6 factors
+```{r}
+# extract 6 factors
+fa_new_6 <-fa(r=corrM_clean, nfactors=6,n.obs = 768, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+
+```{r}
+fa.diagram(fa_new_6)
+```
+
+```{r}
+# visualization
+loadings <- fa.sort(fa_new_6)$loadings
+loadings <- as.data.frame(unclass(loadings))
+colnames(loadings) <- c("Value","External", "Measurability", "Consensus", "Intrinsic", "Difficulty")
+loadings$Items <- rownames(loadings)
+loadings.m <- loadings %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("Value","External", "Measurability", "Consensus", "Intrinsic", "Difficulty")
+rowOrder <- rev(rownames(loadings))
+loadings.m<- arrange(mutate(loadings.m,Items=factor(Items,leve=rowOrder)),Items)
+loadings.m<- arrange(mutate(loadings.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(loadings.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Six Factor Solution from mTurk SONA2 cleaned dataset") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+
+```{r}
+SONA2_fit_f6 <- data.frame(sample = "SONA2", factors = 6, items = 26, observation = 768, chi = fa_new_6$chi, BIC = fa_new_6$BIC, fit = fa_new_6$fit, RMSEA = fa_new_6$RMSEA[1], cumVar = max(fa_new_6$Vaccounted[3,]), complexity = mean(fa_new_6$complexity)) %>%
+  remove_rownames()
+```
+
+combine model fit without outliers
+```{r}
+model_fit_no_outliers <- rbind(SONA2_fit_f4,mTurk2_fit_f4, baseline_fit_f4,  SONA2_fit_f6, mTurk2_fit_f6, baseline_fit_f6)
+
+model_fit_no_outliers %>%
+  kable(format = "html", escape = F) %>%
+kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+

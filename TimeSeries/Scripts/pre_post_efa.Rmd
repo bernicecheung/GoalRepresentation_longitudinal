@@ -1,0 +1,260 @@
+---
+title: "pre_post_efa"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(psych)
+library(ggplot2)
+library(knitr)
+library(janitor)
+library(kableExtra)
+library(here)
+library(nFactors)
+```
+
+# Load and Prep the Data
+
+```{r}
+# load baseline goal representation rating
+baseline_rating <- read.csv(here("Baseline", "Outputs", "baseline_goalRap.csv"))
+
+# load the post rating dataset
+post_rating <- read.csv(here("TimeSeries","Inputs", "merged_goalRep_post_w.csv"))
+
+# load post-rating efa dataset
+post_efa <- read.csv(here("TimeSeries","Outputs", "mTurk_p_EFA_raw.csv"))
+```
+
+subset teh baseline dataframe based on the post rating
+```{r}
+# Exclude 5 goal representation variables and other columns with irrelevant data
+goal_exclude <- c("temporal_duration", "end_state_specificity_R", "frequency_R", "attainment_maintenance_R", "approach_avoidance_R")
+
+# subset the baseline dataframe based on the post rating goals
+base_subset_efa <- baseline_rating %>%
+  select(-goal_exclude) %>%
+  rename_with(~ paste0(.x, "_b"), affordance : visibility) %>%
+  right_join(post_rating, by = c("MTurkCode", "goal")) %>%
+  select(contains("_b")) %>%
+  rename_with(~str_sub(.x, 1, -3))
+```
+
+# 4-factor models
+
+## baseline(subseted) 4-factor model: 
+```{r}
+# extract 4 factors
+fa_base_4 <-fa(r=base_subset_efa, nfactors=4,n.obs = 756, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+```{r}
+fa.diagram(fa_base_4)
+```
+
+
+### Factor loadings
+```{r}
+# visualization
+base_loading_4 <- fa.sort(fa_base_4)$loadings
+base_loading_4 <- as.data.frame(unclass(base_loading_4))
+colnames(base_loading_4) <- c("Value","Clarity", "External", "Consensus")
+base_loading_4$Items <- rownames(base_loading_4)
+base_loading_4.m <- base_loading_4 %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("Value","Clarity", "External", "Consensus")
+rowOrder <- rev(rownames(base_loading_4))
+base_loading_4.m<- arrange(mutate(base_loading_4.m,Items=factor(Items,leve=rowOrder)),Items)
+base_loading_4.m<- arrange(mutate(base_loading_4.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(base_loading_4.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Four Factor Solution from mTurk baseline-subset") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+
+## post 4-factor model: 
+
+```{r}
+# extract 4 factors
+fa_post_4 <-fa(r=post_efa, nfactors=4,n.obs = 756, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+```{r}
+# visualization
+post_loading_4 <- fa.sort(fa_post_4)$loadings
+post_loading_4 <- as.data.frame(unclass(post_loading_4))
+colnames(post_loading_4) <- c("Value","External", "Attainability", "Measurability")
+post_loading_4$Items <- rownames(post_loading_4)
+post_loading_4.m <- post_loading_4 %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("Value","External", "Attainability", "Measurability")
+rowOrder <- rev(rownames(post_loading_4))
+post_loading_4.m<- arrange(mutate(post_loading_4.m,Items=factor(Items,leve=rowOrder)),Items)
+post_loading_4.m<- arrange(mutate(post_loading_4.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(post_loading_4.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Four Factor Solution from mTurk post rating") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+## Factor comparison: 
+
+### Factor Alignment: 
+
+The factors don't align between pre and post
+
+# 6-factor models: 
+
+## baseline(subset) 6-factor model: 
+
+
+```{r}
+# extract 6 factors
+fa_base_6 <-fa(r=base_subset_efa, nfactors=6,n.obs = 756, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+```{r}
+fa.diagram(fa_base_6)
+```
+
+
+### Factor loadings
+```{r}
+# visualization
+base_loading_6 <- fa.sort(fa_base_6)$loadings
+base_loading_6 <- as.data.frame(unclass(base_loading_6))
+colnames(base_loading_6) <- c("Value","External", "Attainability", "Consensus", "Instrumentality", "Measurability")
+base_loading_6$Items <- rownames(base_loading_6)
+base_loading_6.m <- base_loading_6 %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("Value","External", "Attainability", "Consensus", "Instrumentality", "Measurability")
+rowOrder <- rev(rownames(base_loading_6))
+base_loading_6.m<- arrange(mutate(base_loading_6.m,Items=factor(Items,leve=rowOrder)),Items)
+base_loading_6.m<- arrange(mutate(base_loading_6.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(base_loading_6.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Four Factor Solution from mTurk baseline-subset") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+
+## Post rating: 6-factor model: 
+
+```{r}
+# extract 46 factors
+fa_post_6 <-fa(r=post_efa, nfactors=6,n.obs = 756, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+```{r}
+# visualization
+post_loading_6 <- fa.sort(fa_post_6)$loadings
+post_loading_6 <- as.data.frame(unclass(post_loading_6))
+colnames(post_loading_6) <- c("Value","Attainability", "External", "Instrumentality", "Measurability", "Consensus")
+post_loading_6$Items <- rownames(post_loading_6)
+post_loading_6.m <- post_loading_6 %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("Value","Attainability", "External", "Instrumentality", "Measurability", "Consensus")
+rowOrder <- rev(rownames(post_loading_6))
+post_loading_6.m<- arrange(mutate(post_loading_6.m,Items=factor(Items,leve=rowOrder)),Items)
+post_loading_6.m<- arrange(mutate(post_loading_6.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(post_loading_6.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Four Factor Solution from mTurk post rating") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+
+## Factor Comparison
+
+### Factor Alignment
+All factor aligned
+
+### Loading comparison
+
+organize factor-model output
+
+```{r}
+# baseline:
+base_loading_6$comm_base <- fa.sort(fa_base_6)$communality
+
+base_output_6 <- base_loading_6 %>%
+  rowwise() %>%
+  mutate(primary_loading_base = max(abs(c_across(Value:Measurability))),
+         primary_factor_base = names(.)[which.max(abs(c_across(Value:Measurability)))]) %>%
+  select(Items, comm_base, primary_loading_base, primary_factor_base)
+
+# post rating: 
+post_loading_6$comm_post <- fa.sort(fa_post_6)$communality
+
+post_output_6 <- post_loading_6 %>%
+  rowwise() %>%
+  mutate(primary_loading_post = max(abs(c_across(Value:Consensus))),
+         primary_factor_post = names(.)[which.max(abs(c_across(Value:Consensus)))]) %>%
+  select(Items, comm_post, primary_loading_post, primary_factor_post)
+
+```
+
+merge data 
+```{r}
+merged_output <- base_output_6 %>%
+  left_join(post_output_6, by = "Items")
+```
+
+Evaluate loading parameters
+
+```{r}
+factor_comparison <- merged_output %>%
+  mutate(sameFactor = case_when(
+    length(unique(c(primary_factor_base, primary_factor_post))) == 1 ~ TRUE,
+    TRUE~ FALSE
+  )) %>%
+  mutate(squared_diff = case_when(
+    sameFactor == TRUE ~ (primary_loading_base - primary_loading_post) ^2,
+    TRUE ~ NA_real_
+  ))
+
+factor_comparison %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+most factor load onto the same factors except basic needs, control and visibility. Social desirability has the highest difference on loading, which is around 0.05. 
+
+```{r}
+write.csv(factor_comparison, here("TimeSeries","Outputs", "factor_comparison.csv"), row.names = F)
+```
+

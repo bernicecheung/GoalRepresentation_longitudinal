@@ -1,0 +1,546 @@
+---
+title: "ra_rating_analysis_longitudinal"
+author: "Bernice Cheung"
+date: "1/17/2022"
+output: 
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F)
+```
+
+```{r libraries, echo=FALSE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(stringr)
+library(here)
+library(readbulk)
+library(readxl)
+library(irr)
+library(irrNA)
+library(broom)
+library(kableExtra)
+library(janitor)
+```
+
+load data
+```{r}
+ra_rating_raw <- read_bulk(directory = here("RA_rating", "inputs"), fun = read_excel, sheet = 2, col_names = T, n_max = 180)
+```
+
+recode data
+```{r}
+# group variables based on weather it's unipolar / bipolar
+uni_col <- c("measurability", "meaningfulness", "importance", "instrumentality", "visibility", "external_importance","affordance", "difficulty")
+bi_col <- c("social_desirability", "external_motivation", "introjected_motivation", "identified_motivation", "intrinsic_motivation", "ought_motivation", "ideal_motivation", "basic_needs", "commonality", "control", "clarity")
+
+ra_rating_clean <- ra_rating_raw %>%
+  mutate_at(vars(uni_col), funs(recode(.,"1: Not at all" = 1, "2" = 2, "3" = 3, "4:Neutral" = 4, "5" = 5, "6" = 6, "7: Very much" = 7, "99: I can't tell" = 99, "1.0" = 1, "2.0" = 2, "3.0" = 3, "4.0" = 4, "5.0" = 5, "6.0" = 6, "7.0" = 7))) %>%
+  mutate_at(vars(bi_col), funs(recode(.,"1: Strongly disagree" = 1, "2" = 2, "3" = 3, "4: Neutral" = 4, "5" = 5, "6" = 6, "7: Strongly agree" = 7, "99: I can't tell" = 99, "1: strongly disagree" = 1,"7: strongly agree" = 7, "4:Neutral" = 4, "1.0" = 1, "2.0" = 2, "3.0" = 3, "4.0" = 4, "5.0" = 5, "6.0" = 6, "7.0" = 7))) %>%
+  mutate_at(vars(specificity), funs(recode(.,"1: Very general" = 1, "2" = 2, "3" = 3, "4: moderate" = 4, "5" = 5, "6" = 6, "7: very special" = 7, "99: I can't tell" = 99, "1.0" = 1, "2.0" = 2, "3.0" = 3, "4.0" = 4, "5.0" = 5, "6.0" = 6, "7.0" = 7))) %>%
+  mutate_at(vars(approach_avoidance), funs(recode(.,"1: An approach goal" = 1, "2" = 2, "3" = 3, "4: neither an approach nor an avoidance goal" = 4, "5" = 5, "6" = 6, "7: An avoidance goal" = 7, "99: I can't tell" = 99, "1.0" = 1, "2.0" = 2, "3.0" = 3, "4.0" = 4, "5.0" = 5, "6.0" = 6, "7.0" = 7))) %>%
+  mutate_at(vars(attainment_maintenance), funs(recode(.,"1: An attainment goal" = 1, "2" = 2, "3" = 3, "4: neither an attainment nor a maintenance goal" = 4, "5" = 5, "6" = 6, "7: An maintenance goal" = 7, "99: I can't tell" = 99, "1.0" = 1, "2.0" = 2, "3.0" = 3, "4.0" = 4, "5.0" = 5, "6.0" = 6, "7.0" = 7))) %>%
+  mutate_at(vars(attainability), funs(recode(.,"1: 0%" = 1, "2: 10%" = 2, "3: 20%" = 3, "4: 30%" = 4, "5: 40%" = 5, "6: 50%" = 6, "6:50%" = 6,"7: 60%" = 7, "8: 70%" = 8,"9: 80%" = 9,"10: 90%" = 10,"11: 100%" = 11,"99: I can't tell" = 99, "1.0" = 1, "2.0" = 2, "3.0" = 3, "4.0" = 4, "5.0" = 5, "6.0" = 6, "7.0" = 7))) %>%
+  mutate_at(vars(c(attractiveness_achievement, attractiveness_progress)), funs(recode(.,"1: Not at all" = 1, "2: A little good" = 2, "3: Somewhat good" = 3, "4:Good" = 4, "5: Very good" = 5, "6: Great" = 6, "7: One of the best feelings" = 7,"99: I can't tell" = 99, "1.0" = 1, "2.0" = 2, "3.0" = 3, "4.0" = 4, "5.0" = 5, "6.0" = 6, "7.0" = 7))) %>%
+  mutate_at(vars(construal_level), funs(recode(.,"1: low level" = 1, "2" = 2, "3" = 3, "4: mid level" = 4, "5" = 5, "6" = 6, "7: High Level" = 7, "99: I can't tell" = 99, "1.0" = 1, "2.0" = 2, "3.0" = 3, "4.0" = 4, "5.0" = 5, "6.0" = 6, "7.0" = 7))) %>%
+  mutate_if(is.numeric, list(~na_if(., 99))) %>%
+  rowwise() %>%
+  mutate(ra = str_sub(File, start = (nchar("longitudinalRating_") + 1), end = -6L)) %>%
+  dplyr::select(-File)
+
+# replace the difficulty rating from ZH for now 
+ra_rating_clean[ra_rating_clean$ra == "ZH", "difficulty"] <- NA
+```
+
+check recoding
+```{r}
+# count the number of NAs per column
+
+ra_rating_clean %>%
+  summarise_all(funs(sum(is.na(.))))
+```
+
+# ICCs on variable ratings: 
+
+Loop through each dimension and calculate twoway agreement ICC
+
+```{r}
+# check duplicated goals
+ra_rating_clean %>% get_dupes(Goals) %>% tally() %>%
+   filter(n > 1)
+```
+
+```{r}
+# Extract dimension names (exclude connectivity)
+varNames <- names(ra_rating_clean)[c(4, 6:7,9:12, 14,15,17: 27,29, 31: 33)]
+
+# create a df for ICC
+iccDf <- data.frame(dimension = varNames, 
+                    icc = NA, 
+                    icc_lower = NA, 
+                    icc_upper = NA)
+ra_ratingDf_l <- data.frame(Goals = as.character(),
+                      variable = as.character(),
+                      RA_1 = as.numeric(),
+                      RA_2 = as.numeric())
+
+
+# loop through each dimension and extract twoway agreement ICC
+rowIdx = 1
+for (var in varNames){
+  # extract data
+  varDf <- ra_rating_clean[,c("Goals", var, "ra")]
+  # transform it to the wide format (exclude duplicated goals)
+  varDf_w <-  varDf %>%
+  spread(ra, var) %>% select(-Goals)
+  # transform it to the long format
+  varDf_l <- varDf %>%
+    group_by(Goals) %>%
+    mutate(goalOrder = 1:n(),
+          ra_id = paste("RA", goalOrder, sep = "_"), 
+          variable = var) %>%
+    select(-ra, -goalOrder) %>%
+    spread(ra_id, var) %>%
+    select(-c(RA_3:RA_4))
+  # merge the long format dataset
+  ra_ratingDf_l <- rbind(ra_ratingDf_l, varDf_l)
+  # calculate ICC
+  icc_result <- iccNA(varDf_w, rho0 = 0, conf = 0.95, Cs = 10000, detail = FALSE)
+  # extract and score the result to iccDf
+  iccDf[rowIdx,2] <- round(icc_result$ICCs[2,1], 3)
+  iccDf[rowIdx,3] <- round(icc_result$ICCs[2,3], 4)
+  iccDf[rowIdx,4] <- round(icc_result$ICCs[2,4], 3)
+  rowIdx = rowIdx + 1
+}
+```
+
+```{r}
+iccDf %>%
+  arrange(desc(icc)) %>%
+  kable(format = "html", escape = F, caption = "<center>RA rating ICC</center>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+```
+
+```{r}
+# visualization: 
+iccDf <- iccDf %>%
+  arrange(desc(icc))
+
+rowOrder <- iccDf$dimension
+iccDf$dimension <- factor(iccDf$dimension, levels = rowOrder)
+
+
+iccDf %>%
+  ggplot(aes(x=dimension, y = icc)) + geom_bar(stat="identity", fill = "orange") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  ggtitle("Item iter-rater reliability from Study 5 baseline")
+```
+
+histogram of the RA rating: Compared to the actual ratings, the ra ratings are much less skewed
+```{r fig.width = 10, fig.height=10, warning=FALSE}
+ra_rating_clean %>%
+  select(varNames) %>%
+  gather(varNames, key = "variable", value = "rating") %>%
+  ggplot(aes(x = rating)) +
+    geom_histogram(fill   = "orange",
+                   colour = "black",
+                   alpha  = .6) +
+    facet_wrap(~variable, nrow = 7)
+```
+
+# ICCs on factor scores
+
+All factor scores are generated based on the longitudinal factor model at baseline
+
+generate factor score dataframe  
+Notes: exclude the variable connectedness (f4: value, f6: Instrumentality)and conflict (f4: Clarity, f6: External)
+```{r}
+ra_rating_fs4 <- ra_rating_clean %>%
+  mutate(Value = mean(c(attractiveness_achievement , attractiveness_progress , ideal_motivation , importance , construal_level , identified_motivation ,meaningfulness ,
+                  instrumentality , difficulty), na.rm = T),
+         Clarity = mean(c(clarity , attainability , measurability , affordance ,specificity , control), na.rm = T),
+         External = mean(c(ought_motivation , external_motivation , external_importance , introjected_motivation , visibility), na.rm = T),
+         Consensus = mean(c(-intrinsic_motivation , commonality , basic_needs , social_desirability), na.rm = T)) %>% 
+  dplyr::select(Goals,ra,Value,Clarity,External,Consensus)
+
+
+ra_rating_fs6 <- ra_rating_clean %>%
+  rowwise() %>%
+  mutate(Value = mean(c(attractiveness_achievement , attractiveness_progress  , importance , construal_level , identified_motivation , ideal_motivation , meaningfulness) , na.rm = T),
+         External = mean(c(ought_motivation , external_motivation , introjected_motivation , external_importance , visibility), na.rm = T),
+         Attainability = mean(c(attainability ,- difficulty , clarity , affordance) , na.rm = T),
+         Consensus = mean(c(commonality , basic_needs , social_desirability , - intrinsic_motivation) , na.rm = T),
+         Measurability = mean(c(specificity , measurability) , na.rm = T),
+         Instrumentality = mean(c(instrumentality , control) , na.rm = T)) %>%
+  select(Goals, ra, Value, External, Attainability, Consensus, Measurability, Instrumentality)
+```
+
+calculate icc per factor (4-factor)
+```{r}
+# Extract dimension names (exclude connectivity)
+fs4_Names <- names(ra_rating_fs4)[3:6]
+
+# create a df for ICC
+iccDf_fs4 <- data.frame(dimension = fs4_Names, 
+                    icc = NA, 
+                    icc_lower = NA, 
+                    icc_upper = NA)
+
+meanScore_fs4 <- ra_rating_fs4[,c("Goals", "Value", "ra")] %>%
+  spread(ra, "Value") %>%
+  select(Goals)
+
+# loop through each dimension and extract twoway agreement ICC
+rowIdx = 1
+for (var in fs4_Names){
+  # extract data
+  varDf <- ra_rating_fs4[,c("Goals", var, "ra")]
+  # transform it to the wide format (exclude duplicated goals)
+  varDf_w <-  varDf %>%
+  spread(ra, var) %>% select(-Goals)
+  # calculate mean RA rating for each factor
+  meanScore_fs4[paste0(var,"_raMean")] = rowMeans(varDf_w, na.rm = T)
+  # calculate ICC
+  icc_result <- iccNA(varDf_w, rho0 = 0, conf = 0.95, Cs = 10000, detail = FALSE)
+  # extract and score the result to iccDf_fs4
+  iccDf_fs4[rowIdx,2] <- round(icc_result$ICCs[2,1], 3)
+  iccDf_fs4[rowIdx,3] <- round(icc_result$ICCs[2,3], 3)
+  iccDf_fs4[rowIdx,4] <- round(icc_result$ICCs[2,4], 3)
+  rowIdx = rowIdx + 1
+}
+```
+
+generate a table
+```{r}
+iccDf_fs4 %>%
+  arrange(desc(icc)) %>%
+  kable(format = "html", escape = F, caption = "<center>RA 4factor score ICC</center>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+```
+
+calculate icc per factor (6-factor)
+```{r}
+# Extract dimension names (exclude connectivity)
+fs6_Names <- names(ra_rating_fs6)[3:8]
+
+# create a df for ICC
+iccDf_fs6 <- data.frame(dimension = fs6_Names, 
+                    icc = NA, 
+                    icc_lower = NA, 
+                    icc_upper = NA)
+
+meanScore_fs6 <- ra_rating_fs6[,c("Goals", "Value", "ra")] %>%
+  spread(ra, "Value") %>%
+  select(Goals)
+
+# loop through each dimension and extract twoway agreement ICC
+rowIdx = 1
+for (var in fs6_Names){
+  # extract data
+  varDf <- ra_rating_fs6[,c("Goals", var, "ra")]
+  # transform it to the wide format (exclude duplicated goals)
+  varDf_w <-  varDf %>%
+  spread(ra, var) %>% select(-Goals)
+  # calculate mean RA rating for each factor
+  meanScore_fs6[paste0(var,"_raMean")] = rowMeans(varDf_w, na.rm = T)
+  # calculate ICC
+  icc_result <- iccNA(varDf_w, rho0 = 0, conf = 0.95, Cs = 10000, detail = FALSE)
+  # extract and score the result to iccDf_fs6
+  iccDf_fs6[rowIdx,2] <- round(icc_result$ICCs[2,1], 3)
+  iccDf_fs6[rowIdx,3] <- round(icc_result$ICCs[2,3], 3)
+  iccDf_fs6[rowIdx,4] <- round(icc_result$ICCs[2,4], 3)
+  rowIdx = rowIdx + 1
+}
+```
+
+generate a table
+```{r}
+iccDf_fs6 %>%
+  kable(format = "html", escape = F, caption = "<center>RA 6 factor score ICC</center>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+```
+
+# Comparison with the actual data
+
+## Variable ratings
+long the longitudinal baseline dataset
+```{r}
+# load the longitudinal baseline dataset
+base_df <- read.csv(here("Baseline", "Outputs", "goalList_rating.csv"))
+
+# transform to long format 
+base_df_l <- base_df %>%
+  select(-c(MTurkCode,goal_order, listNum, total_goal, goalType,approach_avoidance_R, attainment_maintenance_R,  end_state_specificity_R, failure, frequency_R, initial_time_R, other_resources, commitment, conflict,effort, implementation_intention, procrastination, regret,self_resources, connectedness, temporal_duration, urgency )) %>%
+  gather(affordance: visibility, key = "variable", value = "subject_rating") %>%
+  mutate(Goals = trimws(goals, which = "right")) %>% # get rid of the white space
+  select(-goals)
+```
+
+merge with RA ratings
+```{r}
+merged_rating_l <- ra_ratingDf_l %>%
+  left_join(base_df_l, by = c("Goals", "variable")) %>% 
+  rowwise() %>%
+  mutate(ra_mean = sum(RA_1, RA_2, na.rm = T) / 2)
+```
+
+```{r}
+merged_rating_l %>%
+  group_by(variable) %>%
+  summarise(na_sum = sum(is.na(subject_rating)))
+```
+
+check the # of goals that have complete data
+```{r}
+merged_rating_l_complete <- merged_rating_l %>%
+   filter(!is.na(subject_rating) & !is.na(ra_mean))
+
+length(unique(merged_rating_l_complete$Goals))
+```
+
+
+```{r}
+# merged_complete_sub_w <- merged_rating_l %>%
+#   filter(!is.na(subject_rating) & !is.na(ra_mean)) %>% # subset rows with complete RA_mean & subject rating data
+#   select(-c(RA_1, RA_2, ra_mean)) %>%
+#   distinct() %>%
+#   spread(variable, subject_rating)
+```
+
+```{r}
+merged_complete_ra_w <- merged_rating_l %>%
+  filter(!is.na(subject_rating) & !is.na(ra_mean)) %>% # subset rows with complete RA_mean & subject rating data
+  select(-c(RA_1, RA_2, subject_rating)) %>%
+  distinct() %>%
+  spread(variable, ra_mean)
+```
+
+### T-test
+comparison between subject ratings and ra ratings by variable:  
+    
+subjects had a higher ratings than those of RAs for all variables. Clarity, importance and basic_needs have the largest differences
+```{r}
+t_test_outcomes <- merged_rating_l %>%
+  group_by(variable) %>%
+  group_modify(~ broom::tidy(t.test(.x["subject_rating"], .x["ra_mean"]))) %>%
+  mutate(p_value = round(p.value, 5)) %>%
+  select(variable, estimate1, estimate2, statistic, p_value) %>%
+  rename(subject_meanRating = estimate1, ra_meanRating = estimate2, t_value = statistic) %>%
+  arrange(desc(t_value))
+```
+
+### Correlation
+```{r}
+var_compare_output <- merged_rating_l %>%
+  group_by(variable) %>%
+  group_modify(~ broom::tidy(cor.test(.x$subject_rating, .x$ra_mean, use = "pairwise.complete.obs"))) %>%
+  select(variable, estimate, p.value) %>%
+  rename(corr = estimate, corr_p = p.value) %>%
+  mutate(corr_p = round(corr_p, 3)) %>%
+  right_join(t_test_outcomes, by = "variable") %>%
+  rename(t_test_p=p_value)
+```
+
+visualization
+
+```{r}
+var_compare_output %>%
+  arrange(desc(corr)) %>%
+  kable(format = "html", escape = F, caption = "<center>Comparison between subject ratings and mean RA ratings </center>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+```
+
+```{r}
+# visualization: 
+var_compare_output %>%
+  ggplot(aes(x=variable, y = corr)) + geom_bar(stat="identity") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  ggtitle("correlations between average RA ratings and subject ratings") 
+```
+
+```{r}
+# visualization: 
+var_compare_output %>%
+  ggplot(aes(x=variable, y = t_value)) + geom_bar(stat="identity") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  ggtitle("t-value(subject - ra) between average RA ratings and subject ratings") 
+```
+
+## Factor Scores
+
+generate factor rating 
+
+```{r}
+base_fs4_l <- base_df %>%
+  rowwise() %>%
+  mutate(Value = mean(c(attractiveness_achievement , attractiveness_progress , ideal_motivation , importance , construal_level , identified_motivation ,meaningfulness ,
+                  instrumentality , difficulty), na.rm = T),
+         Clarity = mean(c(clarity , attainability , measurability , affordance ,specificity , control), na.rm = T),
+         External = mean(c(ought_motivation , external_motivation , external_importance , introjected_motivation , visibility), na.rm = T),
+         Consensus = mean(c(-intrinsic_motivation , commonality , basic_needs , social_desirability), na.rm = T)) %>% 
+  dplyr::select(goals,Value,Clarity,External,Consensus) %>%
+  gather(Value:Consensus, key = "factor", value = "subject_rating")
+
+base_fs6_l <- base_df %>%
+  rowwise() %>%
+  mutate(Value = mean(c(attractiveness_achievement , attractiveness_progress  , importance , construal_level , identified_motivation , ideal_motivation , meaningfulness) , na.rm = T),
+         External = mean(c(ought_motivation , external_motivation , introjected_motivation , external_importance , visibility), na.rm = T),
+         Attainability = mean(c(attainability ,- difficulty , clarity , affordance) , na.rm = T),
+         Consensus = mean(c(commonality , basic_needs , social_desirability , - intrinsic_motivation) , na.rm = T),
+         Measurability = mean(c(specificity , measurability) , na.rm = T),
+         Instrumentality = mean(c(instrumentality , control) , na.rm = T)) %>%
+  select(goals, Value, External, Attainability, Consensus, Measurability, Instrumentality) %>%
+  gather(Value:Instrumentality, key = "factor", value = "subject_rating")
+```
+
+merge with ra mean factor scores into a long format
+```{r}
+merged_fs4_l <- meanScore_fs4 %>%
+  gather(Value_raMean:Consensus_raMean, key = "factor", value = "ra_mean") %>%
+  mutate(factor = str_sub(factor, 1, -8)) %>%
+  left_join(base_fs4_l, by = c("Goals" = "goals", "factor" = "factor"))
+
+merged_fs6_l <- meanScore_fs6 %>%
+  gather(Value_raMean:Instrumentality_raMean, key = "factor", value = "ra_mean") %>%
+  mutate(factor = str_sub(factor, 1, -8)) %>%
+  left_join(base_fs6_l, by = c("Goals" = "goals", "factor" = "factor"))
+```
+
+### T-test: 
+
+In the 4-factor model, RA ratings are lower than the subject ratings except for the external factor. In the 6-factor model, RA ratings are lower than the subject ratings on factor value measurability, instrumentality, consensus, but higher on attainability. No differences on external from both factor models
+```{r}
+t_test_outcomes_fs4 <- merged_fs4_l %>%
+  group_by(factor) %>%
+  group_modify(~ broom::tidy(t.test(.x["subject_rating"], .x["ra_mean"]))) %>%
+  mutate(p_value = round(p.value, 5)) %>%
+  select(factor, estimate1, estimate2, statistic, p_value) %>%
+  rename(subject_meanRating = estimate1, ra_meanRating = estimate2, t_value = statistic) %>%
+  arrange(desc(t_value)) 
+```
+
+```{r}
+t_test_outcomes_fs6 <- merged_fs6_l %>%
+  group_by(factor) %>%
+  group_modify(~ broom::tidy(t.test(.x["subject_rating"], .x["ra_mean"]))) %>%
+  mutate(p_value = round(p.value, 5)) %>%
+  select(factor, estimate1, estimate2, statistic, p_value) %>%
+  rename(subject_meanRating = estimate1, ra_meanRating = estimate2, t_value = statistic) %>%
+  arrange(desc(t_value)) 
+```
+
+### Correlation
+```{r}
+var_compare_output_fs4 <- merged_fs4_l %>%
+  group_by(factor) %>%
+  group_modify(~ broom::tidy(cor.test(.x$subject_rating, .x$ra_mean, use = "pairwise.complete.obs"))) %>%
+  select(factor, estimate, p.value) %>%
+  rename(corr = estimate, corr_p = p.value) %>%
+  mutate(corr_p = round(corr_p, 3)) %>%
+  right_join(t_test_outcomes_fs4, by = "factor") %>%
+  rename(t_test_p=p_value)
+
+var_compare_output_fs4 %>%
+  #arrange(desc(icc)) %>%
+  kable(format = "html", escape = F, caption = "<center>Comparison outputs on 4-factor scores </center>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+```
+
+```{r}
+var_compare_output_fs6 <- merged_fs6_l %>%
+  group_by(factor) %>%
+  group_modify(~ broom::tidy(cor.test(.x$subject_rating, .x$ra_mean, use = "pairwise.complete.obs"))) %>%
+  select(factor, estimate, p.value) %>%
+  rename(corr = estimate, corr_p = p.value) %>%
+  mutate(corr_p = round(corr_p, 3)) %>%
+  right_join(t_test_outcomes_fs6, by = "factor") %>%
+  rename(t_test_p=p_value)
+
+var_compare_output_fs6 %>%
+  kable(format = "html", escape = F, caption = "<center>Comparison outputs on 6-factor scores </center>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+```
+
+# updates on 091222
+
+Use Psych::ICC to generate inter-rater reliability using average_raters_absolute scores
+    
+Transform the input dataset into long-format
+```{r}
+ra_rating_fs4_l <- ra_rating_fs4 %>%
+  gather(Value:Consensus, key = "factor", value = "ra_rating") %>%
+  spread(ra, ra_rating)
+
+ra_rating_fs6_l <- ra_rating_fs6 %>%
+  gather(Value:Instrumentality, key = "factor", value = "ra_rating") %>%
+  spread(ra, ra_rating)
+
+#write.csv(ra_rating_fs4_l, here("RA_rating", "outputs", "ra_rating_fs4_l.csv"), row.names = F)
+
+#write.csv(ra_rating_fs6_l, here("RA_rating", "outputs", "ra_rating_fs6_l.csv"), row.names = F)
+```
+
+Generate ICC for each factor
+```{r}
+ra_fs4_icc1k_results <- ra_rating_fs4_l[,-1] %>%
+  nest(-factor) %>%
+  mutate(icc = map(data, ~psych::ICC(.x))) %>% #icc is a list object
+  mutate(results = map(icc, "results")) %>% # extract the results dataframe from the list output
+  unnest(results) %>% # spread the results dataframe
+  filter(type == "ICC1k") %>% # extract Average_raters_absolute ICC
+  select(-data,-icc, -type)
+
+#write.csv(ra_fs4_icc1k_results, here("RA_rating", "outputs", "ra_fs4_icc1k_study5.csv"), row.names = F)
+
+ra_fs6_icc1k_results <- ra_rating_fs6_l[,-1] %>%
+  nest(-factor) %>%
+  mutate(icc = map(data, ~psych::ICC(.x))) %>% #icc is a list object
+  mutate(results = map(icc, "results")) %>% # extract the results dataframe from the list output
+  unnest(results) %>% # spread the results dataframe
+  filter(type == "ICC1k") %>% # extract Average_raters_absolute ICC
+  select(-data,-icc, -type)
+
+#write.csv(ra_fs6_icc1k_results, here("RA_rating", "outputs", "ra_fs6_icc1k_study5.csv"), row.names = F)
+```
+
+```{r}
+ra_fs4_icc1_results <- ra_rating_fs4_l[,-1] %>%
+  nest(-factor) %>%
+  mutate(icc = map(data, ~psych::ICC(.x))) %>% #icc is a list object
+  mutate(results = map(icc, "results")) %>% # extract the results dataframe from the list output
+  unnest(results) %>% # spread the results dataframe
+  filter(type == "ICC1") %>% # extract Average_raters_absolute ICC
+  select(-data,-icc, -type)
+
+#write.csv(ra_fs4_icc1_results, here("RA_rating", "outputs", "ra_fs4_icc1_results_study5.csv"), row.names = F)
+
+ra_fs6_icc1_results <- ra_rating_fs6_l[,-1] %>%
+  nest(-factor) %>%
+  mutate(icc = map(data, ~psych::ICC(.x))) %>% #icc is a list object
+  mutate(results = map(icc, "results")) %>% # extract the results dataframe from the list output
+  unnest(results) %>% # spread the results dataframe
+  filter(type == "ICC1") %>% # extract Average_raters_absolute ICC
+  select(-data,-icc, -type)
+
+#write.csv(ra_fs6_icc1_results, here("RA_rating", "outputs", "ra_fs6_icc1_results_study5.csv"), row.names = F)
+```
+
+write the output
+```{r}
+var_compare_output <- var_compare_output %>%
+  left_join(iccDf, by = c("variable" = "dimension"))
+
+var_compare_output_fs4 <- var_compare_output_fs4 %>%
+  left_join(iccDf_fs4, by = c("factor" = "dimension"))
+
+var_compare_output_fs6 <- var_compare_output_fs6 %>%
+  left_join(iccDf_fs6, by = c("factor" = "dimension"))
+
+write.csv(var_compare_output, here("RA_rating", "outputs", "var_compare_output.csv"), row.names = F)
+write.csv(var_compare_output_fs4, here("RA_rating", "outputs", "var_compare_output_fs4.csv"), row.names = F)
+write.csv(var_compare_output_fs6, here("RA_rating", "outputs", "var_compare_output_fs6.csv"), row.names = F)
+```
+

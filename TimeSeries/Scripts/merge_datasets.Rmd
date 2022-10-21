@@ -1,0 +1,140 @@
+---
+title: "merge_datasets"
+author: "Bernice Cheung"
+date: "02/08/2022"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r library, warning=FALSE}
+library(tidyverse)
+library(here)
+library(readxl)
+```
+
+This script is for merging all datasets from the longitudinal project for external use (omit the MTurkID)
+
+load all relevant datasets
+```{r}
+# load goal content and baseline goal level rating (including the variables excluded from the EFA analysis)
+goal_content_rating_base <- read.csv(here("Baseline", "Outputs", "goalList_rating.csv"))
+
+# load goal content with coded categories
+goal_categories <- read_excel(here("Baseline", "Inputs", "listedGoals_coded.xlsx"))
+
+# load the inter-goal relationship ratings (including bi-directional ratings and priority)
+goal_relation <- read.csv(here("Baseline", "Outputs", "relation_goalDf.csv"))
+
+# load merged goal progress ratings (including progress and striving behavior ratings, and factor scores at baseline and follow-ups)
+goal_merged_progress <- read.csv(here("TimeSeries", "Inputs", "merged_progress_clean_w.csv"))
+
+# load post goal representation ratings 
+goal_rating_post <- read.csv(here("TimeSeries", "Inputs", "merged_goalRep_post_w.csv"))
+
+# load individual differences measures
+sub_indivDiff <- read.csv(here("Baseline", "Inputs", "indivDiffDf.csv"))
+
+# load demographic information 
+sub_demo <- read.csv(here("Baseline", "Inputs", "demoDf.csv"))
+
+# load the baseline wide dataset
+baseline_wide_df <- read.csv(here("Baseline", "Inputs", "wideDf.csv"))
+
+# load follow-up datasets
+f1_df <- read.csv(here("Followups", "Inputs", "raw_F1_clean.csv"))
+f2_df <- read.csv(here("Followups", "Inputs", "raw_F2_clean.csv"))
+f3_df <- read.csv(here("Followups", "Inputs", "raw_F3_clean.csv"))
+
+# load factor scores (both model pre and post)
+fs_df <- read.csv(here("TimeSeries","Outputs", "merged_fs.csv"))
+```
+
+merge baseline data
+```{r}
+longitudinal_merged_baseline_w <- goal_categories %>%
+  dplyr::select(MTurkCode, goal_order, content) %>%
+  left_join(goal_content_rating_base, by = c("MTurkCode", "goal_order")) %>%
+  left_join(dplyr::select(goal_relation, -listNum, -total_goal, -goalType, -conflict, -connectedness, -instrumentality), by = c("MTurkCode", "goal_order" = "goal")) %>%
+  left_join(dplyr::select(goal_merged_progress, MTurkCode, goal, progress_base, satisfaction_base), by = c("MTurkCode", "goal_order" = "goal")) %>%
+  left_join(sub_indivDiff, by = "MTurkCode") %>%
+  left_join(sub_demo, by = "MTurkCode")
+```
+
+add short-term goals to the dataset
+
+```{r}
+three_month_goals <- baseline_wide_df %>%
+  dplyr::select(MTurkCode, starts_with("PB2")) %>%
+  pivot_longer(starts_with("PB2"), names_to = "goal_order", names_prefix = "PB2_", values_to = "three_month_goals") %>%
+  mutate(goal_order = as.numeric(goal_order))
+
+longitudinal_merged_baseline_w <- longitudinal_merged_baseline_w %>%
+  left_join(three_month_goals, by = c("MTurkCode", "goal_order"))
+```
+
+add baseline factor scores
+```{r}
+longitudinal_merged_baseline_w <- longitudinal_merged_baseline_w %>%
+  left_join(dplyr::select(fs_df, MTurkCode, goal, Value_4: Consensus_4, Value_6:Instrumentality_6), by = c("MTurkCode", "goal_order" = "goal"))
+```
+
+
+merge baseline data with all follow-up data 
+```{r}
+# add suffix to post goal representation rating
+names(goal_rating_post)[7:37] <- paste0(names(goal_rating_post)[7:37], "_post")
+
+longitudinal_merged_allTime_w <- longitudinal_merged_baseline_w %>%
+  left_join(dplyr::select(goal_merged_progress, -listNum, -total_goal, -goalType, -progress_base, -satisfaction_base, -commitment, -effort, -failure, -implementation_intention, -other_resources, -procrastination, -regret, -self_resources, -urgency), by = c("MTurkCode", "goal_order" = "goal")) %>%
+  left_join(dplyr::select(goal_rating_post, -listNum, -terminate_time), by = c("MTurkCode", "goal_order" = "goal"))
+```
+
+merge adjusted goals 
+```{r}
+# extract F1 adjusted goals
+f1_adjust <- f1_df %>%
+  dplyr::select(MTurkCode = workerId, starts_with("adjust_F")) %>%
+  pivot_longer(starts_with("adjust_F"), names_to = "goal_order", names_prefix = "adjust_F1_", values_to = "adjusted_goals_F1") %>%
+  mutate(adjusted_goals_F1 = na_if(adjusted_goals_F1, ""), 
+         goal_order = as.numeric(goal_order))
+
+# extract f2 adjusted goals
+f2_adjust <- f2_df %>%
+  dplyr::select(MTurkCode = workerId, starts_with("adjust_F")) %>%
+  pivot_longer(starts_with("adjust_F"), names_to = "goal_order", names_prefix = "adjust_F2_", values_to = "adjusted_goals_F2") %>%
+  mutate(adjusted_goals_F2 = na_if(adjusted_goals_F2, ""), 
+         goal_order = as.numeric(goal_order))
+
+# extract f3 adjusted goals
+f3_adjust <- f3_df %>%
+  dplyr::select(MTurkCode = workerId, starts_with("adjust_F")) %>%
+  pivot_longer(starts_with("adjust_F"), names_to = "goal_order", names_prefix = "adjust_F3_", values_to = "adjusted_goals_F3") %>%
+  mutate(adjusted_goals_F3 = na_if(adjusted_goals_F3, ""), 
+         goal_order = as.numeric(goal_order))
+
+# merge the adjusted goals to the follow-up dataset
+longitudinal_merged_allTime_w <- longitudinal_merged_allTime_w %>%
+  left_join(f1_adjust, by = c("MTurkCode","goal_order")) %>%
+  left_join(f2_adjust, by = c("MTurkCode","goal_order")) %>%
+  left_join(f3_adjust, by = c("MTurkCode","goal_order")) %>%
+  rowwise() %>%
+  mutate(adjust_num = sum(c_across(starts_with("status_F", ignore.case = F)) == "adjusted", na.rm = T))
+```
+
+merge with post factor scores
+
+```{r}
+longitudinal_merged_allTime_w <- longitudinal_merged_allTime_w %>%
+  left_join(dplyr::select(fs_df, MTurkCode, goal, post_timePoint: Consensus_4_post, Value_6_post:Instrumentality_6_post), by = c("MTurkCode", "goal_order" = "goal"))
+```
+
+write the dataset
+```{r}
+#write.csv(longitudinal_merged_baseline_w, here("Baseline", "Outputs", "longitudinal_merged_baseline_w.csv"), row.names = F)
+
+#write.csv(longitudinal_merged_allTime_w, here("TimeSeries", "Outputs", "longitudinal_merged_allTime_w.csv"), row.names = F)
+```
+

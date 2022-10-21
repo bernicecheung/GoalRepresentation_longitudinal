@@ -1,0 +1,1477 @@
+---
+title: "progress_descriptive"
+author: "Bernice Cheung"
+date: "8/12/2021"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+# Load and prep data
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+```{r libraries, echo=FALSE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(psych)
+library(janitor)
+library(broom)
+library(kableExtra)
+library(here)
+library(lme4)
+library(corrplot)
+library(lmerTest)
+```
+
+load the data
+```{r}
+merged_progress_l <- read.csv(here("TimeSeries", "Inputs", "merged_progress_l.csv"))
+merged_progress_w <- read.csv(here("TimeSeries", "Inputs", "merged_progress_w.csv")) %>%
+  mutate(satisfaction_base = recode(satisfaction_base, `8` = 4L)) # correct a typo on qualtric
+
+factorScore_4f <- read.csv(here("Baseline", "Outputs", "factorScoreDf_4f.csv"))
+factorScore_6f <- read.csv(here("Baseline", "Outputs", "factorScoreDf_6f.csv"))
+
+baseline_goalRep <- read.csv(here("Baseline", "Outputs", "baseline_goalRap.csv"))
+
+factorScore_4f_post <- read.csv(here("TimeSeries", "Inputs", "factorScoreDf_4f_post.csv"))
+factorScore_6f_post <- read.csv(here("TimeSeries", "Inputs", "factorScoreDf_6f_post.csv"))
+```
+
+# Descriptive on baseline progress
+
+## Overall descriptive
+The progress was measured by "How much progress have you made towards this goal?", and the scale ranged from 0：Haven't started to 10: 100%.  
+For recurrence goals, progress was measured by "How often have you successfully maintained or achieved this goal?", and the scale ranged from 0: never to 10: 100% of the time  
+As expected, the recurrence goals have the highest baseline progress and the long-term goals has the lowest baseline progress.  
+It is somewhat reasonable to rate 10 for recurrence goals but it's weird to rate 10 on short-term or long-term goals.  
+```{r}
+describeBy(merged_progress_w$progress_base, merged_progress_w$goalType, mat = T) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+goals that were rated as 10 or NA on baseline progress. Most goals are recurrence goals except 3 goals, and I'll exclude them in the analysis involving goal progress. 
+```{r}
+merged_progress_w %>%
+  filter(progress_base == 10 | is.na(progress_base)) %>%
+  ggplot(aes(x = goalType)) + geom_bar(fill = "orange") + 
+  geom_text(stat='count', aes(label=..count..)) + 
+  ggtitle("Goals that were rated as 10 or NA on baseline progress")
+```
+    
+Exclude the three goals that are either long-term or short-term goals, and the two goals have no data on the baseline progress
+```{r}
+merged_progress_clean_w <- merged_progress_w %>%
+  filter(progress_base != 10 | (progress_base == 10 & goalType == "recurrence"))
+
+#write.csv(merged_progress_clean_w, here("TimeSeries", "Inputs", "merged_progress_clean_w.csv"), row.names = F)
+```
+
+A histogram of baseline goal progress by goal type:  
+Around 1/6 of the goals haven't started and most of the goals are in progress.
+Both long term and short term goals are positively skewed and the distribution of recurrence goals are spread out
+```{r}
+merged_progress_clean_w %>%
+  ggplot(aes(x = progress_base)) + 
+  geom_histogram(fill = "orange") + 
+  scale_x_continuous(breaks=seq(0, 10, by = 1)) + 
+  facet_grid(.~goalType) + 
+  theme_classic()
+```
+
+## ICC: 
+25.6% of the variance of baseline progress is between-subject variance (each subject on average listed 3.43 goals)
+```{r}
+mlm_baseProgress <- lmer(progress_base ~ 1 + (1 | MTurkCode), data = merged_progress_clean_w)
+
+VarCorr(mlm_baseProgress) %>%
+  as_tibble() %>%
+  mutate(ICC=vcov/sum(vcov)) %>%
+  select(grp, ICC)
+```
+
+
+# Descriptive on baseline satisfaction 
+
+## Overall descriptive
+
+The baseline satisfaction was measured by "How satisfied are you with your current progress?" on a 7-point scale. The average rating is below the mid point and short term goals have slightly higher satisfaction on the baseline progress. The ratings are positively skewed except for short-term goals, which center around 4-5.
+```{r}
+describeBy(merged_progress_w$satisfaction_base, merged_progress_w$goalType, mat = T) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+```{r}
+merged_progress_clean_w %>%
+  ggplot(aes(x = satisfaction_base)) + 
+  geom_histogram(fill = "orange") + 
+  scale_x_continuous(breaks=seq(0, 10, by = 1)) + 
+  facet_grid(.~goalType) + 
+  theme_classic()
+```
+    
+## ICC
+33% of the variance in baseline satisfaction is attributed to between subject variance. It's higher than baseline progress.
+```{r}
+mlm_baseSat<- lmer(satisfaction_base ~ 1 + (1 | MTurkCode), data = merged_progress_clean_w)
+
+VarCorr(mlm_baseSat) %>%
+  as_tibble() %>%
+  mutate(ICC=vcov/sum(vcov)) %>%
+  select(grp, ICC)
+```
+# Correlations between baseline DVs and baseline factor scores 
+
+The correlations between baseline progress and factor scores are weak except a positive correlation between progress at baseline and attainability from the 6-factor model. When comparing the 4-factor correlations and 6-factor correlations, we can see that the positive correlation between satisfaction and clarity from the 4-factor model can be mainly explained by the positive correlation between satisfaction and attainability. 
+
+## 4-factor scores
+
+### With all the variables
+```{r}
+# merge the factor score data with baseline progress
+factorScore_4f_base <- factorScore_4f %>%
+  right_join(select(merged_progress_clean_w, MTurkCode, goal, progress_base, satisfaction_base), by = c("MTurkCode", "goal"))
+
+# correlate the correlations
+base_corr_f4 <- factorScore_4f_base %>%
+  select(Value: satisfaction_base) %>%
+  cor(use = "pairwise.complete.obs")
+
+# visualization
+corrplot(base_corr_f4, method = "circle",number.cex = .7, order = "AOE", addCoef.col = "black",type = "upper",col= colorRampPalette(c("midnightblue","white", "orange"))(200), title = "correlations between 4-factor scores and DVs with all goals", mar=c(0,0,1,0))
+```
+
+### Correlations with baseline progress
+
+Grouped by goal type: The correlations are mainly driven by long-term goals, which is interesting, because I would expect progress measure to be the least reliable for long-term goals at baseline
+```{r}
+factorScore_4f_base %>%
+  group_by(goalType) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, progress_base, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, caption = "Correlations between baseline progress and the 4-factor scores") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### Correlations with baseline satisfaction
+
+The pattern is similar to those of baseline progress. Other than the positive correlation with clarity, baseline satisfaction also negatively correlate with consensus for short-term and long-term goals. 
+```{r}
+factorScore_4f_base %>%
+  group_by(goalType) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, satisfaction_base, use = "pairwise.complete.obs")),
+            #mean_progress = mean(.x),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, caption = "Correlations between baseline satisfaction and the 4-factor scores") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+## 6-factor scores
+
+### With all the variables
+Attainability seems to be the only factor correlate with both DVs. 
+```{r}
+# merge the factor score data with baseline progress
+factorScore_6f_base <- factorScore_6f %>%
+  right_join(select(merged_progress_clean_w, MTurkCode, goal, progress_base, satisfaction_base), by = c("MTurkCode", "goal"))
+
+# correlate the correlations
+base_corr_f6 <- factorScore_6f_base %>%
+  select(Value: satisfaction_base) %>%
+  cor(use = "pairwise.complete.obs")
+
+# visualization
+corrplot(base_corr_f6, method = "circle",number.cex = .7, order = "AOE", addCoef.col = "black",type = "upper",col= colorRampPalette(c("midnightblue","white", "orange"))(200))
+```
+
+### Correlations with baseline progress
+
+Similar to the correlations with the 4-factor scores, correlations are mainly driven by long-term goals. After grouping based on types, at least the value and external factor don't have a coefficient very close to 0 for long-term and short-term goals. 
+```{r}
+factorScore_6f_base %>%
+  group_by(goalType) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, progress_base, use = "pairwise.complete.obs")),
+            #mean_progress = mean(.x),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, caption = "Correlations between baseline progress and the 6-factor scores") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### ### Correlations with baseline satisfaction
+
+After grouping by goal types, value also positively correlates with baseline satisfaction among long-term goals and consensus negatively correlates with baseline satisfaction among short-term goals. 
+```{r}
+factorScore_6f_base %>%
+  group_by(goalType) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, satisfaction_base, use = "pairwise.complete.obs")),
+            #mean_progress = mean(.x),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, caption = "Correlations between baseline satisfaction and the 6-factor scores") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+# Descriptive on final progress
+
+At each follow-up, progress was measured by : "How much progress have you made out of the total progress you hope to make during this three-month period?" on a 11-point scale: 0: 0% 10: 100% 11: more than I expected. For long-term goals, we displayed both their goals and the planned progress for the 3-month period. For recurrence goals, the measure was identical to the baseline: "How often have you successfully maintained or achieved this goal?" on a 1-11 point scale.  
+    
+Final progress was recoded from participants' last completed follow-ups. 
+```{r}
+# convert monthly DVs to the final DVs 
+merged_progress_clean_w <- merged_progress_clean_w %>%
+  mutate(final_time = case_when( # record the time for their last progress
+    is.na(terminate_time) == FALSE ~ terminate_time,
+    is.na(terminate_time) == TRUE & is.na(status_F3) == FALSE ~ "F3",
+    is.na(terminate_time) == TRUE & is.na(status_F3) == TRUE & is.na(status_F2) ==F ~ "F2",
+    is.na(terminate_time) == TRUE & is.na(status_F3) == TRUE & is.na(status_F2) ==T & is.na(status_F1) ==F~ "F1"
+  ),
+      miss_final = case_when( # record if they miss their last progress evaluation
+    is.na(terminate_time) == TRUE & is.na(status_F3) == TRUE ~ TRUE,
+    is.na(terminate_time) == F | is.na(status_F3) == F ~ FALSE),
+    all_progress = case_when( # record if they complete all three progress evaluations
+      is.na(progress_F1) == F & is.na(progress_F2) == F & is.na(progress_F3) == F ~ TRUE
+    )
+  ) %>%
+  mutate(progress_final = case_when( # record 
+    final_time == "F1" ~ progress_F1, 
+    final_time == "F2" ~ progress_F2,
+    final_time == "F3" ~ progress_F3),
+    satisfaction_final = case_when(
+    final_time == "F1" ~ satisfaction_F1, 
+    final_time == "F2" ~ satisfaction_F2,
+    final_time == "F3" ~ satisfaction_F3),
+    status_final = case_when(
+    final_time == "F1" ~ status_F1, 
+    final_time == "F2" ~ status_F2,
+    final_time == "F3" ~ status_F3)  
+    )
+
+#write.csv(merged_progress_clean_w, here("TimeSeries", "Inputs", "merged_progress_clean_w.csv"), row.names = F)
+```
+
+## Overall descriptive
+
+Group by goal types: All above mid-point; short-term goals had the highest progress
+```{r}
+describeBy(merged_progress_clean_w$progress_final, merged_progress_clean_w$goalType, mat = T) %>%
+  kable(format = "html", escape = F, caption = "the final progress grouped by goal type") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+(final_status_desc <- merged_progress_clean_w %>%
+  group_by(goalType) %>%
+  summarise(mean = mean(progress_final, na.rm = T), 
+            sd = sd(progress_final, na.rm = T), 
+            n = n(), 
+            n_completed = sum(status_final == "completed", na.rm = T), 
+            n_abandoned = sum(status_final == "abandoned", na.rm = T), 
+            n_adjusted = sum(status_final == "adjusted", na.rm = T)) %>%
+  mutate(perc_completed = n_completed /n * 100, 
+         perc_abandoned = n_abandoned /n * 100, 
+         perc_adjusted = n_adjusted / n * 100))
+
+#write.csv(final_status_desc, here("TimeSeries", "Outputs", "final_status_desc.csv"), row.names = F)
+```
+
+Group by the final status: This group validate the measure as completed goals had a mean rating slightly above 10 (100%) despite a few low ratings and abandoned goals had a very low progress ratings. Adjusted goals were a bit tricky. Here, it refers to goals that were adjusted at their last follow-ups, but goals that were adjusted in F1 or F2 were counted in other groups if the participants filled out the later follow-ups. 
+```{r}
+describeBy(merged_progress_clean_w$progress_final, merged_progress_clean_w$status_final, mat = T) %>%
+  kable(format = "html", escape = F, caption = "the final progress grouped by the final status") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Group by the final time point: it's hard to interpret this grouping because goals could be terminated early due to completion, abandoned or attrition. 
+```{r}
+describeBy(merged_progress_clean_w$progress_final, merged_progress_clean_w$final_time, mat = T) %>%
+  kable(format = "html", escape = F, caption = "the final progress grouped by the final time point") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+A visualization of the final progress grouped by goal types and final status: the distribution make sense. 
+```{r}
+merged_progress_clean_w %>%
+  filter(status_final %in% c("abandoned", "completed", "continued")) %>%
+  ggplot(aes(x = progress_final)) + 
+  geom_histogram(fill = "orange") + 
+  scale_x_continuous(breaks=seq(0, 10, by = 1)) + 
+  facet_grid(status_final~goalType)
+```
+
+## ICC
+The percentage of variance that is attribute to the between-subject level is very similar to that in the baseline
+```{r}
+mlm_finalProgress <- lmer(progress_final ~ 1 + (1 | MTurkCode), data = merged_progress_clean_w)
+
+(finalProgress_ICC <- VarCorr(mlm_finalProgress) %>%
+  as_tibble() %>%
+  mutate(ICC=vcov/sum(vcov)) %>%
+  select(grp, ICC))
+```
+
+# Descriptive on final satisfaction
+
+At each follow-up, satisfaction measure was identical to the baseline: "How satisfied are you with this level of progress? " on a 7-point scale 
+
+## Overall descriptive
+
+Group by goal type:the ratings are similar across groups and all are slightly above the mid-point
+```{r}
+describeBy(merged_progress_clean_w$satisfaction_final, merged_progress_clean_w$goalType, mat = T) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Group by the final status: This somewhat validate the satisfaction measure as abandoned goals had very low ratings and completed goals had very high ratings close to the max (7)
+```{r}
+describeBy(merged_progress_clean_w$satisfaction_final, merged_progress_clean_w$status_final, mat = T) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Group by the final time point: it's hard to interpret this grouping without any interactions with other variables. 
+
+```{r}
+describeBy(merged_progress_clean_w$satisfaction_final, merged_progress_clean_w$final_time, mat = T) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Histograms: The distribution makes sense. Compared to the baseline, the distribution of long-term and recurrance goals shipted a bit to the right and that of short-term goals shifted a bit to the left. 
+```{r}
+merged_progress_clean_w %>%
+  filter(status_final %in% c("abandoned", "completed", "continued")) %>%
+  ggplot(aes(x = satisfaction_final)) + 
+  geom_histogram(fill = "orange") + 
+  scale_x_continuous(breaks=seq(0, 10, by = 1)) + 
+  facet_grid(status_final~goalType)
+```
+
+## ICC
+
+The between-subject variance dropped almost in half from the baseline 
+```{r}
+mlm_finalSatisfaction <- lmer(satisfaction_final ~ 1 + (1 | MTurkCode), data = merged_progress_clean_w)
+
+(finalSatisfaction_ICC <- VarCorr(mlm_finalSatisfaction) %>%
+  as_tibble() %>%
+  mutate(ICC=vcov/sum(vcov)) %>%
+  select(grp, ICC))
+```
+
+# Correlations between final DVs and baseline factor scores
+
+These are unit factor scores generated from baseline goal representation ratings. I excluded goals that were adjusted at any follow-ups for the following correlations because they have another set of baseline ratings when they were adjusted. 
+
+## 4-factor score
+
+### with all variables: 
+
+```{r}
+# exclude goals that were adjusted at any follow-up
+adjustedDf <- merged_progress_clean_w %>%
+  filter(status_F1 == "adjusted" | status_F2 == "adjusted" | status_F3 == "adjusted")
+
+merged_progress_noAdj_w <- merged_progress_clean_w %>%
+  anti_join(adjustedDf, by = c("MTurkCode", "goal"))
+
+# merge the factor score data with final progress
+factorScore_4f_final <- factorScore_4f %>%
+  right_join(select(merged_progress_noAdj_w, MTurkCode, goal, progress_final, satisfaction_final, status_final), by = c("MTurkCode", "goal"))
+
+# correlate the correlations
+final_corr_f4 <- factorScore_4f_final %>%
+  select(Value: satisfaction_final) %>%
+  cor(use = "pairwise.complete.obs")
+
+# visualization
+corrplot(final_corr_f4, method = "circle",number.cex = .7, order = "AOE", addCoef.col = "black",type = "upper",col= colorRampPalette(c("midnightblue","white", "orange"))(200))
+```
+
+### Correlations with final progress
+
+Grouped by goal type: Other than the positive correlation between clarity and long-term goals, it seems like external also positively correlate with final progress among long-term goals                              
+```{r}
+factorScore_4f_final %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Consensus), ~cor(.x, progress_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+```
+
+### mlm
+```{r}
+# m1 <- lmer( progress_final ~ Value + External + Clarity + Consensus + (External | MTurkCode) + (Value | MTurkCode) + (Clarity | MTurkCode)
+# 		+ (Consensus | MTurkCode) + , REML = FALSE, data = factorScore_4f_final)
+# 
+# summary(m1)
+```
+
+
+Grouped by final status: Goals that are either abandoned or completed had limited variations in their final progress. Among the goals that are still continuing, only clarity positively correlate with final progress. 
+```{r}
+factorScore_4f_final %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, progress_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+```
+
+Grouped by goal type * final status: only the continued long-term goals and recurrence goals have a somewhat large enough sample to look at the correlation and they show very different pattern with the value and external factor. 
+```{r}
+factorScore_4f_final %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, progress_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### Correlations with final satisfaction
+
+Grouped by goal type: clarity positively correlate with all types of goals. The positive relation with external is mainly driven by long-term goals and the negative relations with consensus is maintly driven by short-term goals.                           
+```{r}
+factorScore_4f_final %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Consensus), ~cor(.x, satisfaction_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+```
+
+
+Grouped by final status: Goals that are either abandoned or completed had limited variations in their final progress. Among the goals that are still continuing, only clarity positively correlate with final satisfaction and it's probability due to the high correlation between final progress and final satisfaction.  
+```{r}
+factorScore_4f_final %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, satisfaction_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+```
+
+Grouped by goal type * final status: only the continued long-term goals and recurrence goals have a somewhat large enough sample to look at the correlation and other than the positive correlation with clarity, continued long term goals also show a positive correlation with external. 
+```{r}
+factorScore_4f_final %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, satisfaction_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+## 6-factor scores
+
+### with all variables: 
+Similar to the correlation patterns with the 4-factor scores, and by comparing the two matrix, we can see that the relationship with clarity showed above is mainly driven by the correlation with attainability. 
+```{r}
+# merge the factor score data with finalline progress
+factorScore_6f_final <- factorScore_6f %>%
+  right_join(select(merged_progress_noAdj_w, MTurkCode, goal, progress_final, satisfaction_final, status_final), by = c("MTurkCode", "goal"))
+
+# correlate the correlations
+final_corr_f6 <- factorScore_6f_final %>%
+  select(Value: satisfaction_final) %>%
+  cor(use = "pairwise.complete.obs")
+
+# visualization
+corrplot(final_corr_f6, method = "circle",number.cex = .7, order = "AOE", addCoef.col = "black",type = "upper",col= colorRampPalette(c("midnightblue","white", "orange"))(200))
+```
+
+### Correlations with final progress
+
+Grouped by goal type: Other than the positive correlation with attainabililty and measurability, it seems like external also correlate with final progress among long-term goals, just weaker than the 4-factor scores.                           
+```{r}
+factorScore_6f_final %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Instrumentality), ~cor(.x, progress_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+```
+
+
+Grouped by final status: Goals that are either abandoned or completed had limited variations in their final progress. Attainability and measurability showed different pattern with completed and continued goals. External only show a positive relationship with the final progress among abandoned goals, which is very different from the external score from the 4-factor model. 
+```{r}
+factorScore_6f_final %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, progress_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+```
+
+Grouped by goal type * final status: only the continued long-term goals and recurrence goals have a somewhat large enough sample to look at the correlation and they show different pattern with the value external and instrumentality factor. 
+```{r}
+factorScore_6f_final %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, progress_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### Correlations with final satisfaction
+
+Grouped by goal type: Compared with the correlations to the four-factor scores, the relationships with the clarity factor showed above are mainly driven by the positive relationship with attainability. Similar to the 4-factor scores, external also positively correlate wtih satisfaction among long-term goals.          
+```{r}
+factorScore_6f_final %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Instrumentality), ~cor(.x, satisfaction_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+```
+
+
+Grouped by final status: It's interesting to see that the relationships between attainability and measurability reverse between continued goals and abandoned goals. However, the abandoned group doesn't have a large sample size and the variation is restricted. 
+```{r}
+factorScore_6f_final %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, satisfaction_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+```
+
+Grouped by goal type * final status: compared to the 4-factor correlations, the negative relationship between final satisfaction with values increased among continued recurrence goals and the positive relationship with external among continued long-term goals decreased, but both are still very weak.
+```{r}
+factorScore_6f_final %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, progress_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+## partial correlation between baseline variables and final progress (Controlling for baseline progress)
+
+ 
+```{r}
+# merge baseline variables with the cleaned datset
+merged_progress_clean_w <- merged_progress_clean_w %>%
+  left_join(select(baseline_goalRep, -listNum, -total_goal, -goalType), by = c("MTurkCode", "goal"))
+```
+
+
+```{r}
+merged_progress_clean_w %>%
+  select(affordance: visibility, progress_final, progress_base) %>%
+  gather(item, value, -progress_final, -progress_base) %>%
+  nest(-item) %>%
+  mutate(fit = map(data, ~lm(progress_final ~ value + progress_base, data = .x)),
+         tidied = map(fit, tidy)) %>%
+  unnest(tidied) %>%
+  filter(term == "value") %>%
+  select(item, estimate, p.value) %>%
+  mutate_if(is.numeric, round, 3) %>%
+  arrange(p.value) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+# Descriptive on the differnces in progress
+Generate differences in progress (progress_final - progress_base)
+```{r}
+merged_progress_clean_w <- merged_progress_clean_w %>%
+  mutate(progress_diff = progress_final - progress_base)
+```
+
+## Overall descriptive
+
+For long term goals, we assess the overall progress at baseline and at follow-ups we assess their progress out of the expected target they set for the three-month period, so the baseline progress can still serve as a co-variate but it doesn't make sense to substract the baseline progres from the final progress. For the other two types of goals, the mean progress is positive and the changes among short-term goals are fairly large (4 on a 10-point scale). 
+
+Group by goal types
+```{r}
+describeBy(merged_progress_clean_w$progress_diff, merged_progress_clean_w$goalType, mat = T) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Group by the final status: this somewhat validate the measure
+```{r}
+describeBy(merged_progress_clean_w$progress_diff, merged_progress_clean_w$status_final, mat = T) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Group by the final time point: there's no clean differences across different time-point. 
+
+```{r}
+describeBy(merged_progress_clean_w$progress_diff, merged_progress_clean_w$final_time, mat = T) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+The distributions are normally spread and they look reasonable. 
+```{r}
+merged_progress_clean_w %>%
+  filter(status_final %in% c("abandoned", "completed", "continued")) %>%
+  ggplot(aes(x = progress_diff)) + 
+  geom_histogram(fill = "orange") + 
+  scale_x_continuous(breaks=seq(-10, 10, by = 1)) + 
+  facet_grid(status_final~goalType)
+```
+
+## ICC: 
+This is very similar to both the baseline and the final progress 
+```{r}
+mlm_progressDiff <- lmer(progress_diff ~ 1 + (1 | MTurkCode), data = merged_progress_clean_w)
+
+VarCorr(mlm_progressDiff) %>%
+  as_tibble() %>%
+  mutate(ICC=vcov/sum(vcov)) %>%
+  select(grp, ICC)
+```
+
+# Descriptive on the differences in satisfaction
+
+Generate differences in satisfaction (satisfaction_final - satisfaction_base)
+```{r}
+merged_progress_clean_w <- merged_progress_clean_w %>%
+  mutate(satisfaction_diff = satisfaction_final - satisfaction_base)
+```
+
+## Overall descriptive
+
+Group by goal types:  No clear differences across the three types and the changes are all small. 
+```{r}
+describeBy(merged_progress_clean_w$satisfaction_diff, merged_progress_clean_w$goalType, mat = T) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Group by final status:  The differeces among completed goals make sense, the decrease in satisfaction among abandoned goals and the increase among continued goals are smaller than I expected, especially given that the average differences in progress among continued goals are fairly large. 
+```{r}
+describeBy(merged_progress_clean_w$satisfaction_diff, merged_progress_clean_w$status_final, mat = T) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Group by the final time point: The differences are mainly driven by goal status 
+
+```{r}
+describeBy(merged_progress_clean_w$satisfaction_diff, merged_progress_clean_w$final_time, mat = T) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+surprisingly, a large portion of continued goals had no changes in people's satisfaction scores, and the changes among abandoned goals are not as negative as I would expected. 
+```{r}
+merged_progress_clean_w %>%
+  filter(status_final %in% c("abandoned", "completed", "continued")) %>%
+  ggplot(aes(x = satisfaction_diff)) + 
+  geom_histogram(fill = "orange") + 
+  scale_x_continuous(breaks=seq(-10, 10, by = 1)) + 
+  facet_grid(status_final~goalType)
+```
+
+## ICC: 
+
+```{r}
+mlm_satisfactionDiff <- lmer(satisfaction_diff ~ 1 + (1 | MTurkCode), data = merged_progress_clean_w)
+
+VarCorr(mlm_satisfactionDiff) %>%
+  as_tibble() %>%
+  mutate(ICC=vcov/sum(vcov)) %>%
+  select(grp, ICC)
+```
+
+# Correlations between the differnces in DVs and baseline factor scores
+
+For the following correlations, I excluded all the adjusted goals and long-term goals. 
+
+## 4-factor score
+
+### With all variables
+```{r}
+# exclude goals that were adjusted at any follow-up
+adjustedDf <- merged_progress_clean_w %>%
+  filter(status_F1 == "adjusted" | status_F2 == "adjusted" | status_F3 == "adjusted")
+
+long_termDf <- merged_progress_clean_w %>%
+  filter(goalType == "long-term")
+
+merged_progress_noAdj_longT_w <- merged_progress_clean_w %>%
+  anti_join(adjustedDf, by = c("MTurkCode", "goal")) %>%
+  anti_join(long_termDf, by = c("MTurkCode", "goal"))
+
+# merge the factor score data with finalline progress
+factorScore_4f_diff <- factorScore_4f %>%
+  right_join(select(merged_progress_noAdj_longT_w, MTurkCode, goal, progress_diff, satisfaction_diff, status_final), by = c("MTurkCode", "goal"))
+
+# correlate the correlations
+final_corr_f4 <- factorScore_4f_diff %>%
+  select(Value: satisfaction_diff) %>%
+  cor(use = "pairwise.complete.obs")
+
+# visualization
+corrplot(final_corr_f4, method = "circle",number.cex = .7, order = "AOE", addCoef.col = "black",type = "upper",col= colorRampPalette(c("midnightblue","white", "orange"))(200))
+```
+
+### Correlations with the differences in progress
+
+Group by goal type: The relationships between factor scores and the differences in progress are very weak 
+```{r}
+factorScore_4f_diff %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Consensus), ~cor(.x, progress_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, caption = "Correlations between progress difference and 4-factor scores") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Group by final status: similarly, the relationships between factor scores and the differences in progress are very weak 
+```{r}
+factorScore_4f_diff %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%   
+  summarise(across(c(Value:Consensus), ~cor(.x, progress_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, caption = "Correlations between progress difference and 4-factor scores") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Grouped by final status * goal type: the relationships between the 4-factor socres are weak among continued recurrence goals. For the rest of the groups, it's hard to interpret because their sample size is too small. For the completed short-term goals, we don't have the restricted range problem here as we did for the final progress, but the relationships are still very weak < .2 
+```{r}
+factorScore_4f_diff %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, progress_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### Correlations with the differences in satisfaction
+
+Exclude only the adjusted goals for the following analysis with satisfaction   
+
+```{r}
+# exclude the adjusted goals 
+
+merged_progress_noAdj_w <- merged_progress_clean_w %>%
+  anti_join(adjustedDf, by = c("MTurkCode", "goal"))
+
+# merge the factor score data with differences in DVs
+factorScore_4f_diff <- factorScore_4f %>%
+  right_join(select(merged_progress_noAdj_w, MTurkCode, goal, progress_diff, satisfaction_diff, status_final), by = c("MTurkCode", "goal"))
+```
+
+
+Group by goal type: The relationships between factor scores and the differences in satisfaction are very weak, except that external may be positively related to differences in satisfaction among long-term goals, which is driven by the positiive relationship between external and final satisfaction  
+```{r}
+factorScore_4f_diff %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Consensus), ~cor(.x, satisfaction_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, caption = "Correlations between satisfaction difference and 4-factor scores") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Group by final status: clarity has negative relationships with differences in satisfaction among abandoned and completed goals and consensus has a positive relationship among completed goals. This pattern is differenct from the relationships between final satisfaction and the factor scores. 
+```{r}
+factorScore_4f_diff %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%   
+  summarise(across(c(Value:Consensus), ~cor(.x, satisfaction_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, caption = "Correlations between satisfaction difference and 4-factor scores") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Grouped by final status * goal type: It seems like there's a positive relationship between changes in satisfaction and external among continued long-term goals and a positive relationship with consensus among completed short-term goals. 
+```{r}
+factorScore_4f_diff %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, satisfaction_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+
+## 6-factor scores
+
+### with all variables: 
+```{r}
+# merge the factor score data with finalline progress
+factorScore_6f_diff <- factorScore_6f %>%
+  right_join(select(merged_progress_noAdj_longT_w, MTurkCode, goal, progress_diff, satisfaction_diff, status_final), by = c("MTurkCode", "goal"))
+
+# correlate the correlations
+final_corr_f6 <- factorScore_6f_diff %>%
+  select(Value: satisfaction_diff) %>%
+  cor(use = "pairwise.complete.obs")
+
+# visualization
+corrplot(final_corr_f6, method = "circle",number.cex = .7, order = "AOE", addCoef.col = "black",type = "upper",col= colorRampPalette(c("midnightblue","white", "orange"))(200))
+```
+
+### Correlation with differences in progress: 
+
+Group by goal type: The relationships between factor scores and the differences in progress are very weak 
+```{r}
+factorScore_6f_diff %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Instrumentality), ~cor(.x, progress_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, caption = "Correlations between progress difference and 4-factor scores") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Group by final status: similarly, the relationships between factor scores and the differences in progress are very weak. The strongest relationship is a negative correlation between completed goals are instrumentality. 
+```{r}
+factorScore_6f_diff %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%   
+  summarise(across(c(Value:Instrumentality), ~cor(.x, progress_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, caption = "Correlations between progress difference and 4-factor scores") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Grouped by final status * goal type: The negative correlation between attainability and completed short-term goals may be driven by the positive relationship between baseline progress and attainability. 
+```{r}
+factorScore_6f_diff %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, progress_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### Correlations with differences in satisfaction
+
+only exclude adjusted goals for the following analysis 
+```{r}
+factorScore_6f_diff <- factorScore_6f %>%
+  right_join(select(merged_progress_noAdj_w, MTurkCode, goal, progress_diff, satisfaction_diff, status_final), by = c("MTurkCode", "goal"))
+```
+
+Group by goal type: The relationships between factor scores and the differences in satisfaction are very weak, except the possible positive correlation between external and differences in satisfaction among long-term goals.  
+```{r}
+factorScore_6f_diff %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Instrumentality), ~cor(.x, satisfaction_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, caption = "Correlations between satisfaction difference and 4-factor scores") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Group by final status: there are negative relationships between attainability and the differences in satisfaction among abandoned and completed goals. The correlations are stronger than those with the clarity factor from the 4-factor model 
+```{r}
+factorScore_6f_diff %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%   
+  summarise(across(c(Value:Instrumentality), ~cor(.x, satisfaction_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, caption = "Correlations between satisfaction difference and 4-factor scores") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Grouped by final status * goal type: The differences in satisfaction showed an interesting negative relationship with attainability and a positive relationship with consensus 
+```{r}
+factorScore_6f_diff %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, satisfaction_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+# Descriptive on average striving behaviors
+
+All variables are measured on a 7-point scale
+
+## Overall descriptive
+
+calculate average striving behavior ratings across all follow-ups.
+```{r}
+merged_progress_clean_w <- merged_progress_clean_w %>%
+  mutate(followup_num = rowSums(!is.na(select(merged_progress_clean_w, status_F1, status_F2, status_F3)))) %>%
+  mutate(AR_mean = rowSums(dplyr :: select(., AR_F1, AR_F2,AR_F3), na.rm = T) / followup_num,
+         commitment_mean = rowSums(dplyr :: select(., commitment_F1, commitment_F2,commitment_F3), na.rm = T) / followup_num,
+         effort_mean = rowSums(dplyr :: select(., effort_F1, effort_F2, effort_F3), na.rm = T) / followup_num,
+         plan_mean = rowSums(dplyr :: select(., plan_F1, plan_F2,plan_F3), na.rm = T) / followup_num,
+         resources_other_mean = rowSums(dplyr :: select(., resources_other_F1, resources_other_F2,resources_other_F3), na.rm = T) / followup_num,
+         resources_self_mean = rowSums(dplyr :: select(., resources_self_F1, resources_self_F2,resources_self_F3), na.rm = T) / followup_num,
+         urgency_mean = rowSums(dplyr :: select(., urgency_F1, urgency_F2,urgency_F3), na.rm = T) / followup_num, 
+         ACRISS_mean = rowSums(dplyr :: select(., ACRISS_F1, ACRISS_F2,ACRISS_F3), na.rm = T) / followup_num, )
+```
+
+descriptive on each striving variable: the ratings on these variables were different across different final status groups 
+```{r}
+# descriptive stats for each variable 
+merged_progress_clean_w %>%
+  dplyr::select(commitment_mean: ACRISS_mean, goalType,status_final ) %>%
+  filter(status_final %in% c("abandoned", "completed", "continued")) %>%
+  gather(commitment_mean: ACRISS_mean, key = "variable", value = "rating") %>%
+  group_by(variable, status_final) %>%
+  summarize(mean = mean(rating, na.rm = TRUE),
+            sd = sd(rating, na.rm = TRUE), 
+            n = n(),
+            min = min(rating, na.rm = TRUE),
+            max = max(rating, na.rm = TRUE),
+            skew = skew(rating, na.rm = T), 
+            kurtosi = kurtosi(rating, na.rm = T)
+            ) %>%
+  arrange(variable) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+histogram：Most distribution looks normal, except the extreme level on commitment (little less than 20% people rated 7 )
+```{r}
+merged_progress_clean_w %>%
+  select(commitment_mean: ACRISS_mean) %>%
+  gather(commitment_mean: ACRISS_mean, key = "variable", value = "rating") %>%
+  ggplot(aes(x = rating)) +
+    geom_histogram(fill   = "orange",
+                   colour = "black",
+                   alpha  = .6) +
+  facet_wrap(~variable)
+```
+
+## ICC
+
+```{r}
+# ACRISS
+mlm <-lmer(ACRISS_mean ~ 1 + (1|MTurkCode), data = merged_progress_clean_w)
+
+ACRISS <- VarCorr(mlm) %>%
+  as_tibble() %>%
+  mutate(ACRISS=vcov/sum(vcov)) %>%
+  dplyr :: select(ACRISS)
+
+# commitment 
+mlm <-lmer(commitment_mean ~ 1 + (1|MTurkCode), data = merged_progress_clean_w)
+
+commitment <- VarCorr(mlm) %>%
+  as_tibble() %>%
+  mutate(commitment=vcov/sum(vcov)) %>%
+  dplyr :: select(commitment)
+
+# effort 
+mlm <-lmer(effort_mean ~ 1 + (1|MTurkCode), data = merged_progress_clean_w)
+
+effort <- VarCorr(mlm) %>%
+  as_tibble() %>%
+  mutate(effort=vcov/sum(vcov)) %>%
+  dplyr :: select(effort)
+# plan
+mlm <-lmer(plan_mean ~ 1 + (1|MTurkCode), data = merged_progress_clean_w)
+
+plan <- VarCorr(mlm) %>%
+  as_tibble() %>%
+  mutate(plan=vcov/sum(vcov)) %>%
+  dplyr :: select(plan)
+# resources_other
+mlm <-lmer(resources_other_mean ~ 1 + (1|MTurkCode), data = merged_progress_clean_w)
+
+resources_other <- VarCorr(mlm) %>%
+  as_tibble() %>%
+  mutate(resources_other=vcov/sum(vcov)) %>%
+  dplyr :: select(resources_other)
+# resources_self
+mlm <-lmer(resources_self_mean ~ 1 + (1|MTurkCode), data = merged_progress_clean_w)
+
+resources_self <- VarCorr(mlm) %>%
+  as_tibble() %>%
+  mutate(resources_self=vcov/sum(vcov)) %>%
+  dplyr :: select(resources_self)
+
+# urgency
+mlm <-lmer(urgency_mean ~ 1 + (1|MTurkCode), data = merged_progress_clean_w)
+
+urgency <- VarCorr(mlm) %>%
+  as_tibble() %>%
+  mutate(urgency=vcov/sum(vcov)) %>%
+  dplyr :: select(urgency)
+
+# combine the outputs into one data frame
+strive_icc <- data.frame("Variance" = c("between subject", "within subject"))
+strive_icc <- bind_cols(strive_icc, ACRISS, commitment, effort, plan,resources_other, resources_self, urgency)
+
+strive_icc %>% kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+# Correlations among DVs, average striving behaviors and baseline factor scores
+
+Adjusted goals were excluded from all following analysis
+
+```{r}
+merged_progress_noAdj_w <- merged_progress_clean_w %>%
+  anti_join(adjustedDf, by = c("MTurkCode", "goal"))
+```
+
+
+## 4-factor scores: 
+Consensus factor correlate little with the striving variables, but the other three positively correlate with striving behaviors like commitment, effort, urgency, which correlate with the DVs. However, these
+factor scores are not correlate with DVs directly. 
+
+```{r, fig.height=10, fig.width=10}
+# merge the factor score data with strving behavior data
+factorScore_4f_diff <- factorScore_4f %>%
+  right_join(select(merged_progress_noAdj_w, MTurkCode, goal, progress_diff, progress_base,progress_final, satisfaction_diff, satisfaction_base, satisfaction_final, commitment_mean: ACRISS_mean), by = c("MTurkCode", "goal"))
+
+# correlate the correlations
+final_corr_f4 <- factorScore_4f_diff %>%
+  select(Value: ACRISS_mean) %>%
+  cor(use = "pairwise.complete.obs")
+
+# visualization
+corrplot(final_corr_f4, method = "circle",number.cex = .7, order = "AOE", addCoef.col = "black",type = "upper",col= colorRampPalette(c("midnightblue","white", "orange"))(200), tl.col = c("darkorange1", "darkorange1", "darkorange1", "darkorange1", "midnightblue", "midnightblue", "midnightblue","midnightblue", "midnightblue","midnightblue","red","red", "red", "darkorange1", "darkorange1", "red", "midnightblue"))
+```
+
+## 6-factor scores: 
+
+Other than the correlation with attainability, there's no major differences between the two factor model. 
+```{r, fig.height=10, fig.width=10}
+# merge the factor score data with strving behavior data
+factorScore_6f_diff <- factorScore_6f %>%
+  right_join(select(merged_progress_noAdj_w, MTurkCode, goal, progress_diff, progress_base,progress_final, satisfaction_diff, satisfaction_base, satisfaction_final, commitment_mean: ACRISS_mean), by = c("MTurkCode", "goal"))
+
+# correlate the correlations
+final_corr_f6 <- factorScore_6f_diff %>%
+  select(Value: ACRISS_mean) %>%
+  cor(use = "pairwise.complete.obs")
+
+# visualization
+corrplot(final_corr_f6, method = "circle",number.cex = .7, order = "AOE", addCoef.col = "black",type = "upper",col= colorRampPalette(c("midnightblue","white", "orange"))(200), tl.col = c("midnightblue", "red", "red", "darkorange1", "darkorange1", "red", "red","red", "red","midnightblue","midnightblue","midnightblue", "midnightblue", "midnightblue", "midnightblue", "red", "darkorange1", "darkorange1", "darkorange1", "darkorange1"))
+```
+
+# Correlation between DVs and individual baseline goal representation variables
+
+Overall, the correlations between DVs and baseline goal representation variables are weak. 
+```{r, fig.height=20, fig.width=20}
+# merge baseline variable with the differnces in DVs
+baseline_goalRep_progress <- merged_progress_clean_w %>%
+  select(MTurkCode, goal, progress_diff, satisfaction_diff, progress_base, progress_final, satisfaction_base, satisfaction_final) %>%
+  left_join(select(baseline_goalRep, MTurkCode, goal, attainability:visibility), by = c("MTurkCode", "goal"))
+
+# correlate the correlations
+corr_dv_baseRep <- baseline_goalRep_progress %>%
+  select(progress_diff: visibility) %>%
+  cor(use = "pairwise.complete.obs")
+
+# visualization
+corrplot(corr_dv_baseRep, method = "circle",number.cex = .7, order = "AOE", addCoef.col = "black",type = "upper",col= colorRampPalette(c("midnightblue","white", "orange"))(200))
+```
+
+# correlations between final DVs and post factor scores
+
+All post factor scores are unit scores generated based on the baseline factor model
+
+## 4-factor scores: 
+
+### With all the variables
+
+The correlations between post factor scores are very similar to those of the baseline factor scores
+```{r}
+factorScore_4f_post <- factorScore_4f_post %>%
+  right_join(select(merged_progress_noAdj_w, MTurkCode, goal, progress_diff, satisfaction_diff, progress_base, progress_final, satisfaction_base, satisfaction_final, goalType, status_final), by = c("MTurkCode", "goal"))
+
+# correlate the correlations
+post_corr_f4 <- factorScore_4f_post %>%
+  select(Value: satisfaction_final) %>%
+  cor(use = "pairwise.complete.obs")
+
+# visualization
+corrplot(post_corr_f4, method = "circle",number.cex = .7, order = "AOE", addCoef.col = "black",type = "upper",col= colorRampPalette(c("midnightblue","white", "orange"))(200))
+```
+
+### Correlations with fianl progress
+
+Grouped by goal type: Compared to the baseline factor scores, the relationships between the final progress and post value and consensus are stronger even though they are still pretty weak. The positive relationship with clarity is fairly strong
+```{r}
+factorScore_4f_post %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Consensus), ~cor(.x, progress_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Grouped by final status: Very similar to the baseline factor score: Goals that are either abandoned or completed had limited variations in their final progress. Among the goals that are still continuing, only clarity positively correlate with final progress.
+```{r}
+factorScore_4f_post %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, progress_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Grouped by goal type * final status: the positive relationship with post clarity score is strong than with the baseline clarity score. Among continued long-term goals, the final progress slightly correlated with baseline external but not with post external score and it doesn't correlate with basline consensus score but has a slight negative correlation with post consensus score. 
+
+```{r}
+factorScore_4f_post %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, progress_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+### Correlations with final satisfaction
+
+Grouped by goal type: the positive relationship with post clarity and external are stronger than those with baseline clarity and external, and it also slightly correlate with value. 
+```{r}
+factorScore_4f_post %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Consensus), ~cor(.x, satisfaction_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+Grouped by final status: It's interesting to see that the relationships with post value and consensus scores are the opposite between abandoned goals and completed goals. Similar to baseline factor scores, the post clarity only correlate with post satisfaction among completed and continued goals. 
+```{r}
+factorScore_4f_post %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, satisfaction_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+Grouped by goal type * final status: the relationship with post value and post consensus are stronger than those at baseline among the continued long-term goals even though they are still very weak. 
+```{r}
+factorScore_4f_post %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, satisfaction_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+## 6-factor scores: 
+
+### With all variables
+
+The correlations between the 6 factors are similar to the baseline 
+```{r, fig.height=5, fig.width=5}
+factorScore_6f_post <- factorScore_6f_post %>%
+  right_join(select(merged_progress_noAdj_w, MTurkCode, goal, progress_diff, satisfaction_diff, progress_base, progress_final, satisfaction_base, satisfaction_final, goalType, status_final), by = c("MTurkCode", "goal"))
+
+# correlate the correlations
+post_corr_f6 <- factorScore_6f_post %>%
+  select(Value: satisfaction_base) %>%
+  cor(use = "pairwise.complete.obs")
+
+# visualization
+corrplot(post_corr_f6, method = "circle",number.cex = .7, order = "AOE", addCoef.col = "black",type = "upper",col= colorRampPalette(c("midnightblue","white", "orange"))(200))
+```
+
+### Correlations with fianl progress
+
+Grouped by goal type: Compared to the baseline factor scores, the relationships between the final progress and post value consensus and instrumentality are stronger even though they are still pretty weak. The positive relationship with attainability is very strong
+```{r}
+factorScore_6f_post %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Instrumentality), ~cor(.x, progress_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Grouped by final status: Among continued goals, the relationships with attainability is very high and it's stronger than with the baseline attainability. The relationships with value, external and instrumentality mainly come from abandoned goals, but the sample size is rather small
+```{r}
+factorScore_6f_post %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, progress_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Grouped by goal type * final status: The positive relationship with attainability is stronger than the baseline, but the post progress is no longer correlate with external even tough its relationship with baseline external is very weak. 
+
+```{r}
+factorScore_6f_post %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, progress_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+### Correlations with final satisfaction
+
+Grouped by goal type: The positive relationship with value is stronger compared to the baseline 
+```{r}
+factorScore_6f_post %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Instrumentality), ~cor(.x, satisfaction_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Grouped by final status: The final satisfaction among continued goals only correlate with attainability and among completed goals it has a slightly positive relationship with value. 
+```{r}
+factorScore_6f_post %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, satisfaction_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+Grouped by goal type * final status: Among continued goals, only for the long-term goals the final satisfaction relates to other factors besides attainability even though it's very weak. 
+```{r}
+factorScore_6f_post %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, satisfaction_final, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+
+# Correlations between the differences in DV and post factor scores
+
+For the following correlations, I excluded long-term goals for the correlations with progress.   
+
+## 4-factor score: 
+
+```{r}
+factorScore_4f_post_noLong <- factorScore_4f_post %>% anti_join(long_termDf, by = c("MTurkCode", "goal"))
+```
+
+### Correlations with the differences in progress
+
+Grouped by goal type: similar to the baseline factor scores, the differences in progress only correlate with clarity 
+```{r}
+factorScore_4f_post_noLong %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Consensus), ~cor(.x, progress_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Grouped by final status: the differences in progress only correlate with clarity among completed and continued goals 
+```{r}
+factorScore_4f_post_noLong %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, progress_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+Grouped by goal type * final status: with further grouping the relationship with clarity among completed goals seems mainly driven by a small sample of recurrence cases
+```{r}
+factorScore_4f_post_noLong %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, progress_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### Correlations with differences satisfaction
+
+Grouped by goal type: Other than the relationship with clarity, differences in satisfaction may have a very weak relationship with external
+```{r}
+factorScore_4f_post %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Consensus), ~cor(.x, satisfaction_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Grouped by final status: The relationship with value and consensus may due to the relationships with the final satisfaction
+```{r}
+factorScore_4f_post %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, satisfaction_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+Grouped by goal type * final status: The differences in satisfaction has a very weak relationship with external score among continued long-term goals. 
+```{r}
+factorScore_4f_post %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Consensus), ~cor(.x, satisfaction_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+## 6-factor score: 
+
+```{r}
+factorScore_6f_post_noLong <- factorScore_6f_post %>% anti_join(long_termDf, by = c("MTurkCode", "goal"))
+```
+
+### Correlations with the differences in progress
+
+Grouped by goal type: similar to the baseline factor scores, the differences in progress only correlate with attainability 
+```{r}
+factorScore_6f_post_noLong %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Instrumentality), ~cor(.x, progress_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Grouped by final status: the differences in progress only correlate with attainability among completed and continued goals 
+```{r}
+factorScore_6f_post_noLong %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, progress_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+Grouped by goal type * final status: with further grouping the relationship with attainability among completed goals seems mainly driven by a small sample of recurrence cases
+```{r}
+factorScore_6f_post_noLong %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, progress_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### Correlations with differences satisfaction
+
+Grouped by goal type: Other than the relationship with clarity, differences in satisfaction may have a very weak relationship with external among long-term goals 
+```{r}
+factorScore_6f_post %>%
+  group_by(goalType) %>%   
+  summarise(across(c(Value:Instrumentality), ~cor(.x, satisfaction_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F, ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+Grouped by final status: The relationship with value and consensus may due to the relationships with the final satisfaction
+```{r}
+factorScore_6f_post %>%
+  drop_na(status_final) %>%
+  group_by(status_final) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, satisfaction_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+Grouped by goal type * final status: The relations with measurability are differences across goal types among the continued goals. 
+```{r}
+factorScore_6f_post %>%
+  drop_na(status_final) %>%
+  group_by(status_final, goalType) %>%
+  summarise(across(c(Value:Instrumentality), ~cor(.x, satisfaction_diff, use = "pairwise.complete.obs")),
+            total_goal = n()) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+## MLM
+```{r}
+# predict final progress
+# m1 <- lmer(progress_final ~ External + Value + Attainability + Consensus + Measurability +Instrumentality+ (External +Value + Attainability +Consensus +  Measurability + Instrumentality| MTurkCode) + progress_base, REML = FALSE, data = factorScore_6f_post)
+# 
+# summary(m1)
+```
+```{r}
+# predict final progress
+m1 <- lmer(progress_final ~ External + Value + Attainability + Consensus + Measurability +Instrumentality+ (1| MTurkCode) + progress_base, REML = FALSE, data = factorScore_6f_post)
+
+summary(m1)
+```
+
+```{r}
+factorScore_6f_post_noMissing <- factorScore_6f_post %>%
+  drop_na()
+```
+
+```{r}
+m1 <- lmer(progress_final ~ (1| MTurkCode) + progress_base, REML = FALSE, data = factorScore_6f_post_noMissing)
+m2 <- lmer(progress_final ~  Attainability + (1| MTurkCode) + progress_base, REML = FALSE, data = factorScore_6f_post_noMissing)
+
+anova(m1, m2)
+```
+
+```{r}
+m3 <- lmer(scale(progress_final) ~ scale(External) + scale(Attainability) + scale(Instrumentality) + (1| MTurkCode) + scale(progress_base), REML = FALSE, data = factorScore_6f_post_noMissing)
+
+summary(m3)
+```
+
+```{r}
+m4 <- lmer(progress_final ~ External + Attainability + (External | MTurkCode) + (Attainability | MTurkCode)+ progress_base, REML = FALSE, data = factorScore_6f_post_noMissing)
+
+anova(m3, m4)
+```
+
+```{r}
+# predict final progress
+m5 <- lmer(satisfaction_final ~ External + Value + Attainability + Consensus + Measurability +Instrumentality+ (1| MTurkCode) + progress_final + satisfaction_base + progress_base, REML = FALSE, data = factorScore_6f_post_noMissing)
+
+summary(m5)
+```
+
+
+# Descriptive table
+generate a descriptive table of all outcome variables for the paper
+
+```{r}
+# merge all input data
+
+output_desp <- merged_progress_clean_w %>%
+  select(progress_final, satisfaction_final, effort_mean, commitment_mean, urgency_mean, ACRISS_mean, plan_mean, resources_self_mean, resources_other_mean) %>%
+  filter(is.na(progress_final) == F)
+
+(output_desp_tab <- as.data.frame(describe(output_desp)) %>%
+    select(mean, sd, skew))
+
+# organize ICC output
+icc_output <- bind_cols(strive_icc, finalProgress_ICC, finalSatisfaction_ICC)
+icc_order <- c("ICC...10", "ICC...12", "effort", "commitment", "urgency", "ACRISS", "plan", "resources_self", "resources_other")
+icc_reorder <- as.numeric(as.vector(icc_output[1,icc_order]))
+
+output_desp_tab$icc <- icc_reorder
+output_desp_tab <- rownames_to_column(output_desp_tab, "outcome variables")
+output_desp_tab$`outcome variables` <- str_extract(output_desp_tab$`outcome variables`, "[^_]+")
+  
+  
+
+#write.csv(output_desp_tab, here("TimeSeries", "Outputs", "output_desp_tab.csv"), row.names = F)
+```
+

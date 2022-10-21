@@ -1,0 +1,391 @@
+---
+title: "spsp_abstract_results"
+author: "Bernice Cheung"
+date: "7/15/2021"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, echo=FALSE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(psych)
+library(janitor)
+library(kableExtra)
+library(here)
+library(corrplot)
+```
+
+# Longitudinal Study Overview: 
+
+## Study Design:
+### Baseline: 
+* 1 baseline includes goal listing (up to 5 goals), goal representation ratings (31 variables), overall progress rating (10 variables), pair-wise goal relationship rating, 
+goal priority ranking, demographic info. individual-difference assessment (12 scales)
+
+### Monthly follow-ups:
+* Participants who passed the baseline screening were invited to all follow-ups. Each follow-up survey was activated for a week. 
+* At each follow-up, participants need to report the current status of each of their goals (continued, completed, abandoned and adjusted) and complete progress ratings. For goals that were completed or abandoned, they need to complete the goal representation ratings.These goals would not show up on their latter surveys. For goals that were adjusted, they need to listed their new goals and complete the goal representation rating for the new goal. These new goals would be tracked on latter surveys. 
+* At the last follow-up, participants need to complete the goal representation ratings for all their goals, regardless their status at F3. If they adjusted their goals at F3, they need to complete the goal representation ratings for your old goals and their new goals. 
+
+## Participants Overview: 
+### Baseline Screening: 
+251 participants completed the baseline survey. Based on the 5 exclusion criteria, 246 participants passed the screening. 
+
+### Follow-up Retention: 
+The retention rates of three follow-up surveys respectively are : 90.7%; 84.6% and 88.2%. 78.9% of the participants were included in all four surveys. 
+```{r}
+merged_summaryDf_subject <- read.csv(here("TimeSeries", "Inputs", "merged_summaryDf_subject.csv"))
+merged_summaryDf_subject%>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+## Goal Overview: 
+* 845 goals were listed at baseline, and around 35% of them were recurrent goals. 
+* 756 goals have post goal representation ratings
+* 150 goals were terminated (either completed or abandoned) before F3.
+* 86 goals were adjusted at follow-ups. 
+```{r}
+merged_summaryDf_goal <- read.csv(here("TimeSeries", "Inputs", "merged_summaryDf_goal.csv"))
+merged_summaryDf_goal%>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+# Baseline Factor Analysis: 
+
+## Baseline Goal Representation Rating Descriptives: 
+```{r}
+goalRating_long_R <- read.csv(here("Baseline", "Outputs", "goalRating_long_R.csv"))
+
+# descriptive stats for each variable 
+goalRating_long_R %>%
+  dplyr::select(variable, rating) %>%
+  group_by(variable) %>%
+  summarize(mean = mean(rating, na.rm = TRUE),
+            sd = sd(rating, na.rm = TRUE), 
+            n = n(),
+            min = min(rating, na.rm = TRUE),
+            max = max(rating, na.rm = TRUE),
+            skew = skew(rating, na.rm = T), 
+            kurtosi = kurtosi(rating, na.rm = T)
+            ) %>%
+  arrange(skew) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+The trend looks more skewed than previous MTurk data
+```{r fig.width = 10, fig.height=10, warning=FALSE}
+# histograms for each dimension
+goalRating_long_R %>%
+  ggplot(aes(x = rating)) +
+    geom_histogram(fill   = "orange",
+                   colour = "black",
+                   alpha  = .6) +
+    facet_wrap(~variable, nrow = 7)
+```
+
+"pairwise.complete.obs" is used for generating correlation matrix.The correlations make sense
+```{r fig.height=20, fig.width=20}
+# transform the long format to short format
+goalDf_wide <- goalRating_long_R %>% spread (variable, rating)
+
+# generate a correctional matrix
+corrM_all <- goalDf_wide %>% 
+  dplyr :: select(affordance:visibility) %>% 
+  cor(use = "pairwise.complete.obs")
+
+# visualization
+corrplot(corrM_all, method = "circle",number.cex = .7, order = "AOE", addCoef.col = "black",type = "upper",col= colorRampPalette(c("midnightblue","white", "orange"))(200))
+```
+
+### Variance Partition
+
+Only the 31 variables for goal representation are included. Only around 6.7% of the variance is on the between subject level. (less than previous mTurk data)
+```{r}
+# subset the long format dataset for only the 31 goal representation variable
+goal_striving <- c("commitment", "urgency", "effort", "initial_time_R", "regret", "procrastination", "failure", "self_resources", "other_resources", "implementation_intention")
+goalDf_R_long <- goalRating_long_R[!goalRating_long_R$variable %in% goal_striving,]
+
+# generate a multilevel model with subject as the random intercept
+mlm <-lmer(rating ~ variable + (1|MTurkCode), data = goalDf_R_long)
+
+# calculate the variance partition coefficient and transform to ICC
+VarCorr(mlm) %>%
+  as_tibble() %>%
+  mutate(icc=vcov/sum(vcov)) %>%
+  dplyr :: select(grp, icc)
+
+Raw <- VarCorr(mlm) %>%
+  as_tibble() %>%
+  mutate(Raw=vcov/sum(vcov)) %>%
+  dplyr :: select(Raw)
+```
+
+## Exploritory Factor Analysis
+
+because the distribution of several variables were very skewed, it might be better to use polychoric correlation rather than Pearson's correlation
+```{r}
+corrM_pc <- read.csv(here("Baseline", "Outputs", "baseline_corrRating_pc.csv")) %>%
+  as.matrix()
+
+goalDf_EFA <- read.csv(here("Baseline", "Outputs", "baseline_EFA_raw.csv"))
+```
+
+### evaluate the number of factors
+```{r}
+# use Very Simple Structure criterion
+res_vss <- psych :: nfactors(corrM_pc, n = 10, rotate = "promax", diagonal = FALSE, fm = "minres", 
+n.obs=845,title="Very Simple Structure",use="pairwise",cor="cor")
+
+# select useful parameters and organize them into a table
+cbind(1:10, res_vss$map) %>%
+  as_tibble() %>%
+  rename(., factor = V1, map = V2) %>%
+  cbind(., res_vss$vss.stats) %>%
+  select(factor, map, fit, complex, eChisq, SRMR, eCRMS, eBIC, eRMS) %>%
+  kable(format = "html", escape = F, caption = "VSS output -mTurk") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+
+```
+
+
+```{r}
+# Use the Scree plot to identify the number of factors have Eigenvalues >1 and the output from the Parallel analysis
+
+ev <- eigen(corrM_pc)
+ap <- parallel(subject=nrow(goalDf_EFA),var=ncol(goalDf_EFA),
+  rep=100,cent=.05)
+nS <- nScree(x=ev$values, aparallel=ap$eigen$qevpea)
+plotnScree(nS)
+```
+
+
+### Extract four factors
+
+```{r}
+# extract 4 factors
+fa_pc_4 <-fa(r=corrM_pc, nfactors=4,n.obs = 845, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+Factor loadings
+```{r}
+fa.diagram(fa_pc_4)
+```
+
+``
+The factors remain the same but some variables have shifted, such as intrinsic motivation
+```{r}
+# visualization
+loadings <- fa.sort(fa_pc_4)$loadings
+loadings <- as.data.frame(unclass(loadings))
+colnames(loadings) <- c("Value","Clarity", "External", "Consensus")
+loadings$Items <- rownames(loadings)
+loadings.m <- loadings %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("Value","Clarity", "External", "Consensus")
+rowOrder <- rev(rownames(loadings))
+loadings.m<- arrange(mutate(loadings.m,Items=factor(Items,leve=rowOrder)),Items)
+loadings.m<- arrange(mutate(loadings.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(loadings.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Four Factor Solution from mTurk Longitudinal") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+
+
+interfactor correlation: 
+
+Less inter-correlated than the previous datasets
+```{r}
+fa_pc_4$Phi %>% 
+  as.tibble() %>% 
+  dplyr::rename(Value = MR1, Clarity = MR2, External = MR3, Cansensus = MR4) %>%
+  round(.,2) %>%
+  remove_rownames() %>%
+  mutate(factor = colnames(.)) %>%
+  select(factor, everything()) %>%
+  kable(format = "html", escape = F, caption = "<center>Factor Correlation of mTurk Longitudinal</center>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+```
+
+Model fit:  
+    
+It fits better than the one with pearson
+```{r}
+data.frame(sample = "mTurk_l", factors = 4, items = 26, observation = 845, chi = fa_pc_4$chi, BIC = fa_pc_4$BIC, fit = fa_pc_4$fit, RMSEA = fa_pc_4$RMSEA[1], cumVar = max(fa_pc_4$Vaccounted[3,]), complexity = mean(fa_pc_4$complexity)) %>%
+  remove_rownames() %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+longitudinal_factorFit <- data.frame(sample = "mTurk", factors = 4, items = 26, observation = 845, chi = fa_pc_4$chi, BIC = fa_pc_4$BIC, fit = fa_pc_4$fit, RMSEA = fa_pc_4$RMSEA[1], cumVar = max(fa_pc_4$Vaccounted[3,]), complexity = mean(fa_pc_4$complexity))
+
+#write.csv(sona_factorFit, "./outputs/mTurk2_factorFit.csv", row.names = F)
+```
+
+### Extract six factors
+```{r}
+# extract 6 factors
+fa_pc_6 <-fa(r=corrM_pc, nfactors=6,n.obs = 845, rotate="promax", SMC=FALSE, fm="minres")
+```
+
+## Factor loadings
+```{r}
+fa.diagram(fa_pc_6)
+```
+
+
+```{r}
+# visualization
+loadings <- fa.sort(fa_pc_6)$loadings
+loadings <- as.data.frame(unclass(loadings))
+colnames(loadings) <- c("Value","External", "Attainability", "Consensus", "Measurability", "Instrumentality")
+loadings$Items <- rownames(loadings)
+loadings.m <- loadings %>% gather(-Items, key = "Factor", value = "Loading")
+colOrder <- c("Value","External", "Attainability", "Consensus", "Measurability", "Instrumentality")
+rowOrder <- rev(rownames(loadings))
+loadings.m<- arrange(mutate(loadings.m,Items=factor(Items,leve=rowOrder)),Items)
+loadings.m<- arrange(mutate(loadings.m,Factor=factor(Factor,leve=colOrder)),Factor)
+
+ggplot(loadings.m, aes(Items, abs(Loading), fill=Loading)) + 
+  facet_wrap(~ Factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "midnightblue", 
+                       midpoint=0, guide="colourbar") +
+  ylab("Loading Strength") + #improve y-axis label + 
+  ggtitle("Six Factor Solution from mTurk Longitudinal") +
+  geom_hline(yintercept = 0.3, color = "red", linetype="dotted") +
+  theme_bw(base_size=10)
+```
+
+interfactor correlation: 
+
+factor value and instrumentality has the highest correlation
+```{r}
+fa_pc_6$Phi %>% 
+  as.tibble() %>% 
+  dplyr::rename(Value = MR1, External = MR2, Attainability = MR3, Consensus = MR4, Measurability = MR5,Instrumentality = MR6) %>%
+  round(.,2) %>%
+  remove_rownames() %>%
+  mutate(factor = colnames(.)) %>%
+  select(factor, everything()) %>%
+  kable(format = "html", escape = F, caption = "<center>Factor Correlation of mTurk Longitudinal</center>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center",fixed_thead = T)
+```
+
+Model fit:   
+    
+it fits better than the one with Pearson
+```{r}
+data.frame(sample = "mTurk_l", factors = 6, items = 26, observation = 845, chi = fa_pc_6$chi, BIC = fa_pc_6$BIC, fit = fa_pc_6$fit, RMSEA = fa_pc_6$RMSEA[1], cumVar = max(fa_pc_6$Vaccounted[3,]), complexity = mean(fa_pc_6$complexity)) %>%
+  remove_rownames() %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+
+longitudinal_factorFit <- data.frame(sample = "mTurk_l", factors = 6, items = 26, observation = 845, chi = fa_pc_6$chi, BIC = fa_pc_6$BIC, fit = fa_pc_6$fit, RMSEA = fa_pc_6$RMSEA[1], cumVar = max(fa_pc_6$Vaccounted[3,]), complexity = mean(fa_pc_6$complexity))
+
+#write.csv(sona_factorFit, "./outputs/mTurk2_factorFit.csv", row.names = F)
+```
+
+### correlation between factor scores across different levels
+
+I double checked the labels but it's still very weird
+```{r fig.height= 2, fig.width=5}
+# create a hierarchical factor structure organization
+ba <- bassAckward(corrM_pc, c(4,6), rotate = "promax", scores = "Bartlett", adjust = T, cut = 0.3, use = "pairwise", plot = F)
+
+# re-label the factors with the factor names
+ba$labels[[1]] <- c("Value", "Clarity", "External", "Consensus")
+ba$labels[[2]] <- c("Value","External", "Attainability", "Consensus", "Measurability", "Instrumentality")
+
+# create the figure
+bassAckward.diagram(ba,digits=2,cut = .3,labels=NULL,marg=c(1,0.2,1.0,0.2),
+main="BassAckward",items=TRUE,sort=TRUE,lr=F,curves=F,organize=T) 
+```
+
+# Pre-post Reliability: 
+
+## Variable level reliability: 
+
+Overall reliablity: 
+```{r}
+varReliab_df <- read.csv(here("TimeSeries", "Outputs", "varReliab.csv"))
+varReliab_df %>%
+  ggplot(aes(x=variable, y=corr)) + 
+  geom_bar(stat="identity") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+```
+
+Only include baseline-F3 conparison: 
+```{r}
+varReliab_df %>%
+  ggplot(aes(x=variable, y=F3)) + 
+  geom_bar(stat="identity") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+```
+
+Variable level reliability breakdown:   
+Goal number break downs:    
+TimePoint: F1: 73; F2: 77 F3: 606   
+Type: short-term: 258; long-term: 210; recurrance: 377   
+Status: continued: 476; completed: 158; abandoned: 82; adjusted: 35
+```{r}
+varReliab_df %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+## Factor Level Reliability: 
+
+### 4-factor Level Reliablity: 
+
+overall reliability
+```{r}
+fs4Reliab_df <- read.csv(here("TimeSeries", "Outputs", "fs4Reliab.csv"))
+fs4Reliab_df %>%
+  ggplot(aes(x=factor, y=corr)) + 
+  geom_bar(stat="identity") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+```
+reliabilty breakdown: 
+```{r}
+fs4Reliab_df %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### 6-facotr reliability: 
+overall reliability
+```{r}
+fs6Reliab_df <- read.csv(here("TimeSeries", "Outputs", "fs6Reliab.csv"))
+fs6Reliab_df %>%
+  ggplot(aes(x=factor, y=corr)) + 
+  geom_bar(stat="identity") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+```
+
+reliabilty breakdown: 
+```{r}
+fs6Reliab_df %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```

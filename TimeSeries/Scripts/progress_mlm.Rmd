@@ -1,0 +1,1242 @@
+---
+title: "progress_mlm"
+author: "Bernice Cheung"
+date: "11/22/2021"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r library, warning=FALSE}
+library(tidyverse)
+library(psych)
+library(ggplot2)
+library(knitr)
+library(janitor)
+library(kableExtra)
+library(here)
+library(lme4)
+library(lmerTest)
+library(r2mlm)
+library(sjPlot)
+library(broom)
+library(lmeresampler)
+```
+
+Import all data
+```{r}
+merged_progress_w <- read.csv(here("TimeSeries", "Inputs", "merged_progress_clean_w.csv")) 
+
+factorScore_4f <- read.csv(here("Baseline", "Outputs", "factorScoreDf_4f.csv"))
+factorScore_6f <- read.csv(here("Baseline", "Outputs", "factorScoreDf_6f.csv"))
+
+baseline_goalRep <- read.csv(here("Baseline", "Outputs", "baseline_goalRap.csv"))
+
+factorScore_4f_post <- read.csv(here("TimeSeries", "Inputs", "factorScoreDf_4f_post.csv"))
+
+factorScore_6f_post <- read.csv(here("TimeSeries", "Inputs", "factorScoreDf_6f_post.csv"))
+```
+
+Generate mean striving behavior scores and merge with factor data
+```{r}
+# rename the factor scores with surrfix
+colnames(factorScore_4f)[4:7] <- paste0(colnames(factorScore_4f)[4:7], "_4f")
+colnames(factorScore_6f)[4:9] <- paste0(colnames(factorScore_6f)[4:9], "_6f")
+colnames(factorScore_4f_post)[4:7] <- paste0(colnames(factorScore_4f_post)[4:7], "_4f_post")
+colnames(factorScore_6f_post)[4:9] <- paste0(colnames(factorScore_6f_post)[4:9], "_6f_post")
+
+# merge data
+merged_progress_w <- merged_progress_w %>%
+  mutate(followup_num = rowSums(!is.na(select(merged_progress_w, status_F1, status_F2, status_F3)))) %>% # generate the number of valid follow-ups
+  mutate(AR_mean = rowSums(dplyr :: select(., AR_F1, AR_F2,AR_F3), na.rm = T) / followup_num, # generate the mean of striving behaviors
+         commitment_mean = rowSums(dplyr :: select(., commitment_F1, commitment_F2,commitment_F3), na.rm = T) / followup_num,
+         effort_mean = rowSums(dplyr :: select(., effort_F1, effort_F2, effort_F3), na.rm = T) / followup_num,
+         plan_mean = rowSums(dplyr :: select(., plan_F1, plan_F2,plan_F3), na.rm = T) / followup_num,
+         resources_other_mean = rowSums(dplyr :: select(., resources_other_F1, resources_other_F2,resources_other_F3), na.rm = T) / followup_num,
+         resources_self_mean = rowSums(dplyr :: select(., resources_self_F1, resources_self_F2,resources_self_F3), na.rm = T) / followup_num,
+         urgency_mean = rowSums(dplyr :: select(., urgency_F1, urgency_F2,urgency_F3), na.rm = T) / followup_num,
+         ACRISS_mean = rowSums(dplyr :: select(., ACRISS_F1, ACRISS_F2,ACRISS_F3), na.rm = T) / followup_num, ) %>%
+  left_join(select(factorScore_4f, -goalType), by = c("MTurkCode", "goal")) %>% # merge with pre and post factor scores
+  left_join(select(factorScore_6f, -goalType), by = c("MTurkCode", "goal")) %>%
+  left_join(select(factorScore_4f_post, -terminate_time), by = c("MTurkCode", "goal")) %>%
+  left_join(select(factorScore_6f_post, -terminate_time), by = c("MTurkCode", "goal"))
+
+#write.csv(merged_progress_w, here("TimeSeries", "Inputs", "merged_progress_clean_w.csv"), row.names = F)
+```
+
+# Predict final progress from baseline goal representation factors
+
+Covariates(Planned): baseline progress + goal type + the last recorded time point 
+
+Covariate (unplanned): baseline satisfaction
+
+Dropped the cases with missing data and scale the variables: included 663 observation
+```{r}
+progress_mlm_df <- merged_progress_w %>%
+  select(MTurkCode, goalType, final_time, progress_base, progress_final, satisfaction_base, Value_4f, Clarity_4f, External_4f, Consensus_4f, Value_6f, External_6f, Attainability_6f, Consensus_6f, Measurability_6f, Instrumentality_6f) %>%
+  mutate_if(is.numeric,scale) %>% 
+  mutate(goalType = relevel(as.factor(goalType), "short-term")) %>%
+  drop_na()
+
+#write.csv(progress_mlm_df, here("TimeSeries", "Outputs", "progress_mlm_df.csv"), row.names = F)
+```
+
+Check ICCs on key variables
+```{r}
+progress_mlm_df %>%
+  select(-goalType, -final_time, -MTurkCode) %>%
+  map(~lmer(.x ~ 1 + (1|MTurkCode), data = progress_mlm_df)) %>%
+  map(VarCorr) %>%
+  map(as_tibble) %>%
+  map(~.x %>% mutate(icc = vcov/sum(vcov))) %>%
+  map(c("icc")) %>%
+  map_dbl(1)  %>% # 8th element is the p-value 
+  tidy %>% 
+  rename(icc = x) %>%
+  arrange(desc(icc)) %>% 
+  kable(format = "html", escape = F, caption = "ICCs with the progress MLM models") %>%
+kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+
+
+## 4-factor model
+
+Unconditional model
+```{r}
+m0_progress <- lmer(progress_final ~ 1 + (1| MTurkCode), REML = FALSE, data = progress_mlm_df)
+```
+
+Backward model comparison
+
+```{r}
+final_progress_mlm_4f <- lmer(progress_final ~ 1 + progress_base + goalType + final_time + satisfaction_base + Clarity_4f + Value_4f + External_4f + Consensus_4f + (1 | MTurkCode), REML = FALSE, data = progress_mlm_df)
+
+step(final_progress_mlm_4f)
+```
+
+### The final model: 
+
+While controlling for baseline progress and satisfaction, both clarity and external factor at baseline predict the final progress
+```{r}
+final_progress_mlm_4f_final <- lmer(progress_final ~ progress_base + satisfaction_base + Clarity_4f + External_4f + (1 | MTurkCode), REML = FALSE, data = progress_mlm_df)
+
+sjPlot::tab_model(m0_progress, final_progress_mlm_4f_final, 
+                  dv.labels = c("Null Model", "Model final_progress_mlm_4f_final"))
+```
+
+boostrap
+```{r}
+final_progress_mlm_4f_final_boot <- bootstrap_pvals(final_progress_mlm_4f_final, type = "residual", B = 1000, hccme = "hc2", aux.dist = "mammen")
+```
+
+```{r}
+final_progress_mlm_4f_final_boot$coefficients
+```
+
+
+## 6-factor model
+
+Backward model comparison
+
+```{r}
+final_progress_mlm_6f <- lmer(progress_final ~ 1 + progress_base + goalType + final_time + satisfaction_base + Attainability_6f + External_6f + Instrumentality_6f + Consensus_6f + Value_6f + Measurability_6f + (1 | MTurkCode), REML = FALSE, data = progress_mlm_df)
+
+step(final_progress_mlm_6f)
+```
+
+### the final model: 
+```{r}
+final_progress_mlm_6f_final <- lmer(progress_final ~ progress_base + satisfaction_base + Attainability_6f + External_6f + Instrumentality_6f + (1 | MTurkCode), REML = FALSE, data = progress_mlm_df)
+
+sjPlot::tab_model(m0_progress, final_progress_mlm_6f_final, 
+                  dv.labels = c("Null Model", "Model final_progress_mlm_6f_final"), seed = 0504)
+```
+
+```{r}
+sjPlot::tab_model(final_progress_mlm_6f_final, bootstrap = T)
+```
+
+
+```{r}
+final_progress_mlm_6f_final_boot <- bootstrap_pvals(final_progress_mlm_6f_final, type = "residual", B = 1000, hccme = "hc2", aux.dist = "mammen")
+```
+
+```{r}
+final_progress_mlm_6f_final_boot$coefficients
+```
+
+```{r}
+
+set.seed(1234)
+boo1 <-lmeresampler:: bootstrap(model = final_progress_mlm_6f_final, .f = fixef, type = "residual", B = 1000)
+
+print(boo1, ci = T)
+```
+
+
+
+## Comparison between the 4-factor model and the 6-factor model
+
+There's no significant difference between the two final models
+```{r}
+# compare the two model
+anova(final_progress_mlm_4f_final, final_progress_mlm_6f_final)
+
+sjPlot::tab_model(final_progress_mlm_4f_final, final_progress_mlm_6f_final, 
+                  dv.labels = c("Model final_progress_mlm_4f_final", "Model final_progress_mlm_6f_final"))
+```
+
+If add the final time to the final_progress_mlm_6f_final model
+```{r}
+final_progress_mlm_6f_final_2 <- lmer(progress_final ~ progress_base + satisfaction_base + final_time + Attainability_6f + External_6f + Instrumentality_6f + (1 | MTurkCode), REML = FALSE, data = progress_mlm_df)
+
+anova(final_progress_mlm_4f_final, final_progress_mlm_6f_final_2)
+
+sjPlot::tab_model(final_progress_mlm_4f_final, final_progress_mlm_6f_final_2, 
+                  dv.labels = c("Model final_progress_mlm_4f_final", "Model final_progress_mlm_6f_final"))
+```
+
+```{r}
+summary(final_progress_mlm_4f_final)
+```
+
+
+# Predict final satisfaction from baseline goal representation factors
+
+Covariates(Planned): baseline satisfaction + base and final progress + goal type + the last recorded time point 
+
+Covariate (unplanned): baseline satisfaction
+
+Dropped the cases with missing data and scale the variables: included 663 observation
+```{r}
+satisfaction_mlm_df <- merged_progress_w %>%
+  select(MTurkCode, goalType, final_time, satisfaction_base, satisfaction_final, progress_base, progress_final, Value_4f, Clarity_4f, External_4f, Consensus_4f, Value_6f, External_6f, Attainability_6f, Consensus_6f, Measurability_6f, Instrumentality_6f) %>%
+  mutate_if(is.numeric,scale) %>% 
+  mutate(goalType = relevel(as.factor(goalType), "short-term")) %>%
+  drop_na()
+
+#write.csv(satisfaction_mlm_df, here("TimeSeries", "Outputs", "satisfaction_mlm_df.csv"), row.names = F)
+```
+
+Check ICCs on key variables
+```{r}
+satisfaction_mlm_df %>%
+  select(satisfaction_base, satisfaction_final, progress_base, progress_final) %>%
+  map(~lmer(.x ~ 1 + (1|MTurkCode), data = satisfaction_mlm_df)) %>%
+  map(VarCorr) %>%
+  map(as_tibble) %>%
+  map(~.x %>% mutate(icc = vcov/sum(vcov))) %>%
+  map(c("icc")) %>%
+  map_dbl(1)  %>% # 8th element is the p-value 
+  tidy %>% 
+  rename(icc = x) %>%
+  arrange(desc(icc)) %>% 
+  kable(format = "html", escape = F, caption = "ICCs with the satisfaction MLM models") %>%
+kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+  
+```
+
+## 4-factor model
+
+Unconditional model
+```{r}
+m0_satisfaction <- lmer(satisfaction_final ~ 1 + (1| MTurkCode), REML = FALSE, data = satisfaction_mlm_df)
+```
+
+Backward model comparison
+
+```{r}
+final_satisfaction_mlm_4f <- lmer(satisfaction_final ~ 1 + satisfaction_base + goalType + final_time + progress_final + progress_base + Clarity_4f + Value_4f + External_4f + Consensus_4f + (1 | MTurkCode), REML = FALSE, data = satisfaction_mlm_df)
+
+step(final_satisfaction_mlm_4f)
+```
+
+### The final model: 
+
+While controlling for baseline satisfaction and satisfaction, both clarity and external factor at baseline predict the final satisfaction
+```{r}
+final_satisfaction_mlm_4f_final <- lmer(satisfaction_final ~ satisfaction_base + goalType + final_time + progress_final + progress_base + Clarity_4f + (1 | MTurkCode), REML = FALSE, data = satisfaction_mlm_df)
+
+sjPlot::tab_model(m0_satisfaction, final_satisfaction_mlm_4f_final, 
+                  dv.labels = c("Null Model", "Model final_satisfaction_mlm_4f_final"))
+```
+
+## 6-factor model
+
+Backward model comparison
+
+```{r}
+final_satisfaction_mlm_6f <- lmer(satisfaction_final ~ satisfaction_base + goalType + final_time + progress_final + progress_base + Attainability_6f + External_6f + Instrumentality_6f + Consensus_6f + Value_6f + Measurability_6f + (1 | MTurkCode), REML = FALSE, data = satisfaction_mlm_df)
+
+step(final_satisfaction_mlm_6f)
+```
+
+### the final model: 
+```{r}
+final_satisfaction_mlm_6f_final <- lmer(satisfaction_final ~ satisfaction_base + goalType + final_time + progress_final + progress_base + Attainability_6f + (1 | MTurkCode), REML = FALSE, data = satisfaction_mlm_df)
+
+sjPlot::tab_model(m0_satisfaction, final_satisfaction_mlm_6f_final, 
+                  dv.labels = c("Null Model", "Model final_satisfaction_mlm_6f_final"))
+```
+
+### Comparison between the 4-factor model and the 6-factor model
+
+There's no significant difference between the two final models
+```{r}
+# compare the two model
+anova(final_satisfaction_mlm_4f_final, final_satisfaction_mlm_6f_final)
+
+sjPlot::tab_model(final_satisfaction_mlm_4f_final, final_satisfaction_mlm_6f_final, 
+                  dv.labels = c("Model final_satisfaction_mlm_4f_final", "Model final_satisfaction_mlm_6f_final"))
+```
+
+If add the final time to the final_satisfaction_mlm_6f_final model
+```{r}
+final_satisfaction_mlm_6f_final_2 <- lmer(satisfaction_final ~ satisfaction_base + satisfaction_base + final_time + Attainability_6f + External_6f + Instrumentality_6f + (1 | MTurkCode), REML = FALSE, data = satisfaction_mlm_df)
+
+anova(final_satisfaction_mlm_4f_final, final_satisfaction_mlm_6f_final_2)
+
+sjPlot::tab_model(final_satisfaction_mlm_4f_final, final_satisfaction_mlm_6f_final_2, 
+                  dv.labels = c("Model final_satisfaction_mlm_4f_final", "Model final_satisfaction_mlm_6f_final"))
+```
+
+
+# Predict average striving behavior from baseline factor scores
+
+## Commitment: 
+
+Covariates: baseline commitment, number of valid follow-ups, goal type
+
+generate mlm dataframes without NAs: 657 observation
+```{r}
+comm_mlm <- merged_progress_w %>%
+  select(MTurkCode, goalType, followup_num, commitment, commitment_mean, contains("_4f"), contains("_6f")) %>%
+  drop_na()
+```
+
+Check ICCs on key variables
+```{r}
+comm_mlm %>%
+  select(-goalType, -followup_num, -MTurkCode) %>%
+  map(~lmer(.x ~ 1 + (1|MTurkCode), data = comm_mlm)) %>%
+  map(VarCorr) %>%
+  map(as_tibble) %>%
+  map(~.x %>% mutate(icc = vcov/sum(vcov))) %>%
+  map(c("icc")) %>%
+  map_dbl(1)  %>% # 8th element is the p-value 
+  tidy %>% 
+  rename(icc = x) %>%
+  arrange(desc(icc)) %>% 
+  kable(format = "html", escape = F, caption = "ICCs with the commitment MLM models") %>%
+kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### 4-factor models
+
+unconditional model: 
+```{r}
+m0_comm <- lmer(commitment_mean ~ 1 + (1| MTurkCode), REML = FALSE, data = comm_mlm)
+```
+
+Backward model comparison
+```{r}
+comm_mlm_4f <- lmer(commitment_mean ~ 1 + commitment + goalType + followup_num + Clarity_4f + Value_4f + External_4f + Consensus_4f + (1 | MTurkCode), REML = FALSE, data = comm_mlm)
+
+step(comm_mlm_4f)
+```
+
+### The final model with 4 factor score
+```{r}
+comm_mlm_4f_final <- lmer(commitment_mean ~ commitment + Clarity_4f + External_4f + (1 | MTurkCode), REML = FALSE, data = comm_mlm)
+
+sjPlot::tab_model(m0_comm, comm_mlm_4f_final, 
+                  dv.labels = c("Null Model", "Model comm_mlm_4f_final"), 
+                  title = "Predict average commitment from 4-factor scores")
+```
+
+### 6-factor models
+
+Backward model comparison
+```{r}
+comm_mlm_6f <- lmer(commitment_mean ~ 1 + commitment + goalType + followup_num +Attainability_6f + External_6f + Instrumentality_6f + Consensus_6f + Value_6f + Measurability_6f + (1 | MTurkCode), REML = FALSE, data = comm_mlm)
+
+step(comm_mlm_6f)
+```
+
+### The final model with 4 factor score
+```{r}
+comm_mlm_6f_final <- lmer(commitment_mean ~ commitment + Attainability_6f + External_6f + Instrumentality_6f + (1 | MTurkCode), REML = FALSE, data = comm_mlm)
+
+sjPlot::tab_model(m0_comm, comm_mlm_6f_final, 
+                  dv.labels = c("Null Model", "Model comm_mlm_6f_final"), 
+                  title = "Predict average commitment from 6-factor scores")
+```
+
+### A Comparison between the 4-factor predictor and 6-factor predictor
+
+The 6-factor model fit better with the data
+```{r}
+anova(comm_mlm_4f_final,comm_mlm_6f_final)
+
+sjPlot::tab_model(comm_mlm_4f_final, comm_mlm_6f_final, 
+                  dv.labels = c("Null Model", "Model comm_mlm_6f_final"), 
+                  title = "Predicting average commitment")
+```
+
+
+## Effort: 
+
+Covariates: baseline effort, number of valid follow-ups, goal type
+
+generate mlm dataframes without NAs: 657 observation
+```{r}
+eff_mlm <- merged_progress_w %>%
+  select(MTurkCode, goalType, followup_num, effort, effort_mean, contains("_4f"), contains("_6f")) %>%
+  drop_na()
+```
+
+Check ICCs on key variables
+```{r}
+eff_mlm %>%
+  select(effort, effort_mean) %>%
+  map(~lmer(.x ~ 1 + (1|MTurkCode), data = eff_mlm)) %>%
+  map(VarCorr) %>%
+  map(as_tibble) %>%
+  map(~.x %>% mutate(icc = vcov/sum(vcov))) %>%
+  map(c("icc")) %>%
+  map_dbl(1)  %>% # 8th element is the p-value 
+  tidy %>% 
+  rename(icc = x) %>%
+  arrange(desc(icc)) %>% 
+  kable(format = "html", escape = F, caption = "ICCs with the effort MLM models") %>%
+kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### 4-factor models
+
+unconditional model: 
+```{r}
+m0_eff <- lmer(effort_mean ~ 1 + (1| MTurkCode), REML = FALSE, data = eff_mlm)
+```
+
+Backward model comparison
+```{r}
+eff_mlm_4f <- lmer(effort_mean ~ 1 + effort + goalType + followup_num + Clarity_4f + Value_4f + External_4f + Consensus_4f + (1 | MTurkCode), REML = FALSE, data = eff_mlm)
+
+step(eff_mlm_4f)
+```
+
+### The final model with 4 factor score
+```{r}
+eff_mlm_4f_final <- lmer(effort_mean ~ effort + Clarity_4f + Value_4f + External_4f + (1 | MTurkCode), REML = FALSE, data = eff_mlm)
+
+sjPlot::tab_model(m0_eff, eff_mlm_4f_final, 
+                  dv.labels = c("Null Model", "Model eff_mlm_4f_final"), 
+                  title = "Predict average effort from 4-factor scores")
+```
+
+### 6-factor models
+
+Backward model comparison
+```{r}
+eff_mlm_6f <- lmer(effort_mean ~ 1 + effort + goalType + followup_num +Attainability_6f + External_6f + Instrumentality_6f + Consensus_6f + Value_6f + Measurability_6f + (1 | MTurkCode), REML = FALSE, data = eff_mlm)
+
+step(eff_mlm_6f)
+```
+
+### The final model with 4 factor score
+```{r}
+eff_mlm_6f_final <- lmer(effort_mean ~ effort + Attainability_6f + External_6f + Instrumentality_6f + Value_6f + (1 | MTurkCode), REML = FALSE, data = eff_mlm)
+
+sjPlot::tab_model(m0_eff, eff_mlm_6f_final, 
+                  dv.labels = c("Null Model", "Model eff_mlm_6f_final"), 
+                  title = "Predict average effort from 6-factor scores")
+```
+
+### A Comparison between the 4-factor predictor and 6-factor predictor
+
+The 6-factor model fit better with the data
+```{r}
+anova(eff_mlm_4f_final,eff_mlm_6f_final)
+
+sjPlot::tab_model(eff_mlm_4f_final, eff_mlm_6f_final, 
+                  dv.labels = c("Model eff_mlm_4f_final", "Model eff_mlm_6f_final"), 
+                  title = "Predicting average effort")
+```
+
+## Urgency: 
+
+Covariates: baseline urgency, number of valid follow-ups, goal type
+
+generate mlm dataframes without NAs: 658 observation
+```{r}
+urg_mlm <- merged_progress_w %>%
+  select(MTurkCode, goalType, followup_num, urgency, urgency_mean, contains("_4f"), contains("_6f")) %>%
+  drop_na()
+```
+
+Check ICCs on key variables
+```{r}
+urg_mlm %>%
+  select(urgency, urgency_mean) %>%
+  map(~lmer(.x ~ 1 + (1|MTurkCode), data = urg_mlm)) %>%
+  map(VarCorr) %>%
+  map(as_tibble) %>%
+  map(~.x %>% mutate(icc = vcov/sum(vcov))) %>%
+  map(c("icc")) %>%
+  map_dbl(1)  %>% # 8th element is the p-value 
+  tidy %>% 
+  rename(icc = x) %>%
+  arrange(desc(icc)) %>% 
+  kable(format = "html", escape = F, caption = "ICCs with the urgency MLM models") %>%
+kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### 4-factor models
+
+unconditional model: 
+```{r}
+m0_urg <- lmer(urgency_mean ~ 1 + (1| MTurkCode), REML = FALSE, data = urg_mlm)
+```
+
+Backward model comparison
+```{r}
+urg_mlm_4f <- lmer(urgency_mean ~ 1 + urgency + goalType + followup_num + Clarity_4f + Value_4f + External_4f + Consensus_4f + (1 | MTurkCode), REML = FALSE, data = urg_mlm)
+
+step(urg_mlm_4f)
+```
+
+### The final model with 4 factor score
+```{r}
+urg_mlm_4f_final <- lmer(urgency_mean ~ urgency + goalType + Clarity_4f + Value_4f + External_4f + (1 | MTurkCode), REML = FALSE, data = urg_mlm)
+
+sjPlot::tab_model(m0_urg, urg_mlm_4f_final, 
+                  dv.labels = c("Null Model", "Model urg_mlm_4f_final"), 
+                  title = "Predict average urgency from 4-factor scores")
+```
+
+### 6-factor models
+
+Backward model comparison
+```{r}
+urg_mlm_6f <- lmer(urgency_mean ~ 1 + urgency + goalType + followup_num +Attainability_6f + External_6f + Instrumentality_6f + Consensus_6f + Value_6f + Measurability_6f + (1 | MTurkCode), REML = FALSE, data = urg_mlm)
+
+step(urg_mlm_6f)
+```
+
+### The final model with 4 factor score
+```{r}
+urg_mlm_6f_final <- lmer(urgency_mean ~ urgency + Attainability_6f + External_6f + Instrumentality_6f + Value_6f + (1 | MTurkCode), REML = FALSE, data = urg_mlm)
+
+sjPlot::tab_model(m0_urg, urg_mlm_6f_final, 
+                  dv.labels = c("Null Model", "Model urg_mlm_6f_final"), 
+                  title = "Predict average urgency from 6-factor scores")
+```
+
+### A Comparison between the 4-factor predictor and 6-factor predictor
+
+The 6-factor model fit better with the data
+```{r}
+anova(urg_mlm_4f_final,urg_mlm_6f_final)
+
+sjPlot::tab_model(urg_mlm_4f_final, urg_mlm_6f_final, 
+                  dv.labels = c("Null Model", "Model urg_mlm_6f_final"), 
+                  title = "Predicting average urgency")
+```
+
+Add goal type of the 6f final model
+```{r}
+urg_mlm_6f_final_2 <- lmer(urgency_mean ~ urgency + Attainability_6f + External_6f + Instrumentality_6f + Value_6f + goalType + (1 | MTurkCode), REML = FALSE, data = urg_mlm)
+
+anova(urg_mlm_4f_final,urg_mlm_6f_final_2)
+
+sjPlot::tab_model(urg_mlm_4f_final, urg_mlm_6f_final_2, 
+                  dv.labels = c("urg_mlm_4f_final Model", "Model urg_mlm_6f_final_2
+                                
+                                "), 
+                  title = "Predicting average urgency")
+```
+
+## Plan: 
+
+Covariates: baseline implementation_intention, number of valid follow-ups, goal type
+
+generate mlm dataframes without NAs: 657 observation
+```{r}
+plan_mlm <- merged_progress_w %>%
+  select(MTurkCode, goalType, followup_num, implementation_intention, plan_mean, contains("_4f"), contains("_6f")) %>%
+  drop_na()
+```
+
+Check ICCs on key variables
+```{r}
+plan_mlm %>%
+  select(implementation_intention, plan_mean) %>%
+  map(~lmer(.x ~ 1 + (1|MTurkCode), data = plan_mlm)) %>%
+  map(VarCorr) %>%
+  map(as_tibble) %>%
+  map(~.x %>% mutate(icc = vcov/sum(vcov))) %>%
+  map(c("icc")) %>%
+  map_dbl(1)  %>% # 8th element is the p-value 
+  tidy %>% 
+  rename(icc = x) %>%
+  arrange(desc(icc)) %>% 
+  kable(format = "html", escape = F, caption = "ICCs with the plan MLM models") %>%
+kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### 4-factor models
+
+unconditional model: 
+```{r}
+m0_plan <- lmer(plan_mean ~ 1 + (1| MTurkCode), REML = FALSE, data = plan_mlm)
+```
+
+Backward model comparison
+```{r}
+plan_mlm_4f <- lmer(plan_mean ~ 1 + implementation_intention + goalType + followup_num + Clarity_4f + Value_4f + External_4f + Consensus_4f + (1 | MTurkCode), REML = FALSE, data = plan_mlm)
+
+step(plan_mlm_4f)
+```
+
+### The final model with 4 factor score
+```{r}
+plan_mlm_4f_final <- lmer(plan_mean ~ implementation_intention + Clarity_4f + External_4f + (1 | MTurkCode), REML = FALSE, data = plan_mlm)
+
+sjPlot::tab_model(m0_urg, plan_mlm_4f_final, 
+                  dv.labels = c("Null Model", "Model plan_mlm_4f_final"), 
+                  title = "Predict average plan from 4-factor scores")
+```
+
+### 6-factor models
+
+Backward model comparison
+```{r}
+plan_mlm_6f <- lmer(plan_mean ~ 1 + implementation_intention + goalType + followup_num +Attainability_6f + External_6f + Instrumentality_6f + Consensus_6f + Value_6f + Measurability_6f + (1 | MTurkCode), REML = FALSE, data = plan_mlm)
+
+step(plan_mlm_6f)
+```
+
+### The final model with 4 factor score
+```{r}
+plan_mlm_6f_final <- lmer(plan_mean ~ implementation_intention + Attainability_6f + External_6f + (1 | MTurkCode), REML = FALSE, data = plan_mlm)
+
+sjPlot::tab_model(m0_urg, plan_mlm_6f_final, 
+                  dv.labels = c("Null Model", "Model plan_mlm_6f_final"), 
+                  title = "Predict average plan from 6-factor scores")
+```
+
+### A Comparison between the 4-factor predictor and 6-factor predictor
+
+The two models are almost identicle
+```{r}
+anova(plan_mlm_4f_final,plan_mlm_6f_final)
+
+sjPlot::tab_model(plan_mlm_4f_final, plan_mlm_6f_final, 
+                  dv.labels = c("plan_mlm_4f_final", "Model plan_mlm_6f_final"), 
+                  title = "Predicting average plan")
+```
+
+
+
+## ACRISS: 
+
+Covariates: number of valid follow-ups, goal type;  ACRISS doesn't have baseline measure, so I use regret and procrastination as potential covariate 
+
+generate mlm dataframes without NAs: 656 observation;
+```{r}
+ACRISS_mlm <- merged_progress_w %>%
+  select(MTurkCode, goalType, followup_num, ACRISS_mean, contains("_4f"), contains("_6f"), regret, procrastination) %>%
+  drop_na()
+```
+
+Check ICCs on key variables
+```{r}
+ACRISS_mlm %>%
+  select(regret, procrastination, ACRISS_mean) %>%
+  map(~lmer(.x ~ 1 + (1|MTurkCode), data = ACRISS_mlm)) %>%
+  map(VarCorr) %>%
+  map(as_tibble) %>%
+  map(~.x %>% mutate(icc = vcov/sum(vcov))) %>%
+  map(c("icc")) %>%
+  map_dbl(1)  %>% # 8th element is the p-value 
+  tidy %>% 
+  rename(icc = x) %>%
+  arrange(desc(icc)) %>% 
+  kable(format = "html", escape = F, caption = "ICCs with the ACRISS MLM models") %>%
+kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### 4-factor models
+
+unconditional model: 
+```{r}
+m0_ACRISS <- lmer(ACRISS_mean ~ 1 + (1| MTurkCode), REML = FALSE, data = ACRISS_mlm)
+```
+
+Backward model comparison
+```{r}
+ACRISS_mlm_4f <- lmer(ACRISS_mean ~ 1 + goalType + followup_num + regret +procrastination+ Clarity_4f + Value_4f + External_4f + Consensus_4f + (1 | MTurkCode), REML = FALSE, data = ACRISS_mlm)
+
+step(ACRISS_mlm_4f)
+```
+
+### The final model with 4 factor score
+```{r}
+ACRISS_mlm_4f_final <- lmer(ACRISS_mean ~ followup_num + procrastination + Clarity_4f + (1 | MTurkCode), REML = FALSE, data = ACRISS_mlm)
+
+sjPlot::tab_model(m0_urg, ACRISS_mlm_4f_final, 
+                  dv.labels = c("Null Model", "Model ACRISS_mlm_4f_final"), 
+                  title = "Predict average ACRISS from 4-factor scores")
+```
+
+### 6-factor models
+
+Backward model comparison
+```{r}
+ACRISS_mlm_6f <- lmer(ACRISS_mean ~ 1 + goalType + followup_num + regret +procrastination+ +Attainability_6f + External_6f + Instrumentality_6f + Consensus_6f + Value_6f + Measurability_6f + (1 | MTurkCode), REML = FALSE, data = ACRISS_mlm)
+
+step(ACRISS_mlm_6f)
+```
+
+### The final model with 4 factor score
+```{r}
+ACRISS_mlm_6f_final <- lmer(ACRISS_mean ~ followup_num + procrastination + Attainability_6f + (1 | MTurkCode), REML = FALSE, data = ACRISS_mlm)
+
+sjPlot::tab_model(m0_urg, ACRISS_mlm_6f_final, 
+                  dv.labels = c("Null Model", "Model ACRISS_mlm_6f_final"), 
+                  title = "Predict average ACRISS from 6-factor scores")
+```
+
+### A Comparison between the 4-factor predictor and 6-factor predictor
+
+The two models are almost identicle
+```{r}
+anova(ACRISS_mlm_4f_final,ACRISS_mlm_6f_final)
+
+sjPlot::tab_model(ACRISS_mlm_4f_final, ACRISS_mlm_6f_final, 
+                  dv.labels = c("Model ACRISS_mlm_4f_final", "Model ACRISS_mlm_6f_final"), 
+                  title = "Predicting average ACRISS")
+```
+
+## self_resources: 
+
+Covariates: number of valid follow-ups, goal type;  self_resources doesn't have baseline measure, so I use regret and self_resources as potential covariate 
+
+generate mlm dataframes without NAs: 655 observation;
+```{r}
+self_resources_mlm <- merged_progress_w %>%
+  select(MTurkCode, goalType, followup_num, resources_self_mean, contains("_4f"), contains("_6f"), regret, self_resources) %>%
+  drop_na()
+```
+
+Check ICCs on key variables
+```{r}
+self_resources_mlm %>%
+  select(self_resources, resources_self_mean) %>%
+  map(~lmer(.x ~ 1 + (1|MTurkCode), data = self_resources_mlm)) %>%
+  map(VarCorr) %>%
+  map(as_tibble) %>%
+  map(~.x %>% mutate(icc = vcov/sum(vcov))) %>%
+  map(c("icc")) %>%
+  map_dbl(1)  %>% # 8th element is the p-value 
+  tidy %>% 
+  rename(icc = x) %>%
+  arrange(desc(icc)) %>% 
+  kable(format = "html", escape = F, caption = "ICCs with the self_resources MLM models") %>%
+kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### 4-factor models
+
+unconditional model: 
+```{r}
+m0_self_resources <- lmer(resources_self_mean ~ 1 + (1| MTurkCode), REML = FALSE, data = self_resources_mlm)
+```
+
+Backward model comparison
+```{r}
+self_resources_mlm_4f <- lmer(resources_self_mean ~ 1 + goalType + followup_num +self_resources+ Clarity_4f + Value_4f + External_4f + Consensus_4f + (1 | MTurkCode), REML = FALSE, data = self_resources_mlm)
+
+step(self_resources_mlm_4f)
+```
+
+### The final model with 4 factor score
+```{r}
+self_resources_mlm_4f_final <- lmer(resources_self_mean ~ self_resources + Clarity_4f + Value_4f + External_4f + (1 | MTurkCode), REML = FALSE, data = self_resources_mlm)
+
+sjPlot::tab_model(m0_urg, self_resources_mlm_4f_final, 
+                  dv.labels = c("Null Model", "Model self_resources_mlm_4f_final"), 
+                  title = "Predict average self_resources from 4-factor scores")
+```
+
+### 6-factor models
+
+Backward model comparison
+```{r}
+self_resources_mlm_6f <- lmer(resources_self_mean ~ 1 + goalType + followup_num +self_resources+ +Attainability_6f + External_6f + Instrumentality_6f + Consensus_6f + Value_6f + Measurability_6f + (1 | MTurkCode), REML = FALSE, data = self_resources_mlm)
+
+step(self_resources_mlm_6f)
+```
+
+### The final model with 4 factor score
+```{r}
+self_resources_mlm_6f_final <- lmer(resources_self_mean ~ self_resources + Attainability_6f + External_6f + (1 | MTurkCode), REML = FALSE, data = self_resources_mlm)
+
+sjPlot::tab_model(m0_urg, self_resources_mlm_6f_final, 
+                  dv.labels = c("Null Model", "Model self_resources_mlm_6f_final"), 
+                  title = "Predict average self_resources from 6-factor scores")
+```
+
+### A Comparison between the 4-factor predictor and 6-factor predictor
+
+the 4-factor model had a better fit
+```{r}
+anova(self_resources_mlm_4f_final,self_resources_mlm_6f_final)
+
+sjPlot::tab_model(self_resources_mlm_4f_final, self_resources_mlm_6f_final, 
+                  dv.labels = c("Model self_resources_mlm_4f_final", "Model self_resources_mlm_6f_final"), 
+                  title = "Predicting average self_resources")
+```
+
+
+
+## other_resources: 
+
+Covariates: number of valid follow-ups, goal type;  other_resources doesn't have baseline measure, so I use regret and other_resources as potential covariate 
+
+generate mlm dataframes without NAs: 655 observation;
+```{r}
+other_resources_mlm <- merged_progress_w %>%
+  select(MTurkCode, goalType, followup_num, resources_other_mean, contains("_4f"), contains("_6f"), other_resources) %>%
+  drop_na()
+```
+
+Check ICCs on key variables
+```{r}
+other_resources_mlm %>%
+  select(other_resources, resources_other_mean) %>%
+  map(~lmer(.x ~ 1 + (1|MTurkCode), data = other_resources_mlm)) %>%
+  map(VarCorr) %>%
+  map(as_tibble) %>%
+  map(~.x %>% mutate(icc = vcov/sum(vcov))) %>%
+  map(c("icc")) %>%
+  map_dbl(1)  %>% # 8th element is the p-value 
+  tidy %>% 
+  rename(icc = x) %>%
+  arrange(desc(icc)) %>% 
+  kable(format = "html", escape = F, caption = "ICCs with the other_resources MLM models") %>%
+kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+### 4-factor models
+
+unconditional model: 
+```{r}
+m0_other_resources <- lmer(resources_other_mean ~ 1 + (1| MTurkCode), REML = FALSE, data = other_resources_mlm)
+```
+
+Backward model comparison
+```{r}
+other_resources_mlm_4f <- lmer(resources_other_mean ~ 1 + goalType + followup_num +other_resources+ Clarity_4f + Value_4f + External_4f + Consensus_4f + (other_resources + External_4f | MTurkCode), REML = FALSE, data = other_resources_mlm)
+
+step(other_resources_mlm_4f)
+```
+
+### The final model with 4 factor score
+```{r}
+other_resources_mlm_4f_final <- lmer(resources_other_mean ~ other_resources + External_4f + (1 | MTurkCode), REML = FALSE, data = other_resources_mlm)
+
+sjPlot::tab_model(m0_urg, other_resources_mlm_4f_final, 
+                  dv.labels = c("Null Model", "Model other_resources_mlm_4f_final"), 
+                  title = "Predict average other_resources from 4-factor scores")
+```
+
+### 6-factor models
+
+Backward model comparison
+```{r}
+other_resources_mlm_6f <- lmer(resources_other_mean ~ 1 + goalType + followup_num +other_resources+ +Attainability_6f + External_6f + Instrumentality_6f + Consensus_6f + Value_6f + Measurability_6f + (other_resources + External_4f  | MTurkCode), REML = FALSE, data = other_resources_mlm)
+
+step(other_resources_mlm_6f)
+```
+
+### The final model with 4 factor score
+```{r}
+other_resources_mlm_6f_final <- lmer(resources_other_mean ~ other_resources + External_6f + (1 | MTurkCode), REML = FALSE, data = other_resources_mlm)
+
+sjPlot::tab_model(m0_urg, other_resources_mlm_6f_final, 
+                  dv.labels = c("Null Model", "Model other_resources_mlm_6f_final"), 
+                  title = "Predict average other_resources from 6-factor scores")
+```
+
+### A Comparison between the 4-factor predictor and 6-factor predictor
+
+the 2 models are identical 
+```{r}
+anova(other_resources_mlm_4f_final,other_resources_mlm_6f_final)
+
+sjPlot::tab_model(other_resources_mlm_4f_final, other_resources_mlm_6f_final, 
+                  dv.labels = c("Model other_resources_mlm_4f_final", "Model other_resources_mlm_6f_final"), 
+                  title = "Predicting average other_resources")
+```
+
+# Organize outputs 
+
+## Extract significant beta coefficients from 4-factor models
+
+```{r}
+# progress
+progress_coeff_4f <- summary(final_progress_mlm_4f_final)$coefficients
+progress_coeff_4f_sig <- progress_coeff_4f[c("Clarity_4f", "External_4f"), "Estimate"]
+
+# satisfaction
+satisfaction_coeff_4f <- summary(final_satisfaction_mlm_4f_final)$coefficients
+satisfaction_coeff_4f_sig <- satisfaction_coeff_4f[c("Clarity_4f"), "Estimate"]
+
+# commitment
+comm_coeff_4f <- summary(comm_mlm_4f_final)$coefficients
+comm_coeff_4f_sig <- comm_coeff_4f[c("Clarity_4f", "External_4f"), "Estimate"]
+# effort
+eff_coeff_4f <- summary(eff_mlm_4f_final)$coefficients
+eff_coeff_4f_sig <- eff_coeff_4f[c("Clarity_4f", "External_4f", "Value_4f"), "Estimate"]
+# urgency
+urg_coeff_4f <- summary(urg_mlm_4f_final)$coefficients
+urg_coeff_4f_sig <- urg_coeff_4f[c("Clarity_4f", "External_4f", "Value_4f"), "Estimate"]
+# implementation intention
+plan_coeff_4f <- summary(plan_mlm_4f_final)$coefficients
+plan_coeff_4f_sig <- plan_coeff_4f[c("Clarity_4f", "External_4f"), "Estimate"]
+# action crisis
+ACRISS_coeff_4f <- summary(ACRISS_mlm_4f_final)$coefficients
+ACRISS_coeff_4f_sig <- ACRISS_coeff_4f[c("Clarity_4f"), "Estimate"]
+# self-resources
+self_resources_coeff_4f <- summary(self_resources_mlm_4f_final)$coefficients
+self_resources_coeff_4f_sig <- self_resources_coeff_4f[c("Clarity_4f", "External_4f", "Value_4f"), "Estimate"]
+# other-resources
+other_resources_coeff_4f <- summary(other_resources_mlm_4f_final)$coefficients
+other_resources_coeff_4f_sig <- other_resources_coeff_4f[c("External_4f"), "Estimate"]
+```
+
+## Generate output dataset for APA table
+
+```{r}
+extract_fix_effect <- function(mlm_model_output){
+  fix_effect_df <- apa_print(mlm_model_output)$table %>%
+  mutate(p_num = as.numeric(p.value),
+         estimate_str = as.character(estimate, keep_label = FALSE)) %>%
+  mutate(estimate = case_when(p.value == "< .001" ~ paste0(estimate, "***"),
+                              p_num < .05 ~ paste0(estimate, "**"),
+                              p_num <= .1 ~ paste0(estimate, "*"),
+                              TRUE ~ estimate_str)) %>% 
+  select(term, estimate, conf.int)
+  return(fix_effect_df)
+}
+```
+
+```{r}
+# extract fix effect output
+fix_output_final_comm_4f <- extract_fix_effect(comm_mlm_4f_final) %>%
+  mutate(across("term", str_replace, "Commitment", "Baseline Behavior"))
+fix_output_final_eff_4f <- extract_fix_effect(eff_mlm_4f_final)  %>%
+  mutate(across("term", str_replace, "Effort", "Baseline Behavior"))
+fix_output_final_urg_4f <- extract_fix_effect(urg_mlm_4f_final)  %>%
+  mutate(across("term", str_replace, "Urgency", "Baseline Behavior"))
+fix_output_final_plan_4f <- extract_fix_effect(plan_mlm_4f_final)  %>%
+  mutate(across("term", str_replace, "Implementation intention", "Baseline Behavior"))
+fix_output_final_ACRISS_4f <- extract_fix_effect(ACRISS_mlm_4f_final)  %>%
+  mutate(across("term", str_replace, "Procrastination", "Baseline Behavior"))
+fix_output_final_self_resources_4f <- extract_fix_effect(self_resources_mlm_4f_final)  %>%
+  mutate(across("term", str_replace, "Self resources", "Baseline Behavior"))
+
+fix_output_final_other_resources_mlm_4f <- extract_fix_effect(other_resources_mlm_4f_final)  %>%
+  mutate(across("term", str_replace, "Other resources", "Baseline Behavior"))
+
+fix_output_strive_4f_df <- fix_output_final_urg_4f %>%
+  left_join(fix_output_final_comm_4f, by = "term") %>%
+  left_join(fix_output_final_eff_4f, by = "term") %>%
+  left_join(fix_output_final_plan_4f, by = "term") %>%
+  left_join(fix_output_final_ACRISS_4f, by = "term") %>%
+  left_join(fix_output_final_self_resources_4f, by = "term") %>%
+  left_join(fix_output_final_self_resources_4f, by = "term")
+
+# Extract random effect
+vars_comm_strive_4f <- data.frame(insight::get_variance(comm_mlm_4f_final), model = "Commonality", observation = as.character(nobs(comm_mlm_4f_final)), group = as.character(comm_mlm_4f_final@Gp[2]))
+
+vars_eff_strive_4f <- data.frame(insight::get_variance(eff_mlm_4f_final), model = "Effort", observation = as.character(nobs(eff_mlm_4f_final)), group = as.character(eff_mlm_4f_final@Gp[2]))
+
+vars_urg_strive_4f <- data.frame(insight::get_variance(urg_mlm_4f_final), model = "Urgency", observation = as.character(nobs(urg_mlm_4f_final)), group = as.character(urg_mlm_4f_final@Gp[2]))
+
+vars_plan_strive_4f <- data.frame(insight::get_variance(plan_mlm_4f_final), model = "Implementation Intention", observation = as.character(nobs(plan_mlm_4f_final)), group = as.character(plan_mlm_4f_final@Gp[2]))
+
+vars_ACRISS_strive_4f <- data.frame(insight::get_variance(ACRISS_mlm_4f_final), model = "Action Crisis", observation = as.character(nobs(ACRISS_mlm_4f_final)), group = as.character(ACRISS_mlm_4f_final@Gp[2]))
+
+vars_self_resources_strive_4f <- data.frame(insight::get_variance(self_resources_mlm_4f_final), model = "Self Resources", observation = as.character(nobs(self_resources_mlm_4f_final)), group = as.character(self_resources_mlm_4f_final@Gp[2]))
+
+vars_other_resources_strive_4f <- data.frame(insight::get_variance(other_resources_mlm_4f_final), model = "Other Resources", observation = as.character(nobs(other_resources_mlm_4f_final)), group = as.character(other_resources_mlm_4f_final@Gp[2]))
+
+vars_strive_4f_df <- rbind(vars_urg_strive_4f, vars_comm_strive_4f, vars_eff_strive_4f,  vars_plan_strive_4f, vars_ACRISS_strive_4f, vars_self_resources_strive_4f, vars_other_resources_strive_4f) %>%
+  mutate(ICC = var.random / (var.random + var.residual), 
+         `Marginal R2` = var.fixed / (var.fixed + var.random + var.residual),
+         `Conditional R2` = (var.fixed + var.random) / (var.fixed + var.random + var.residual)) %>%
+  select(var.random, var.residual, ICC, `Marginal R2`, `Conditional R2`, observation, group) %>%
+  mutate(across(var.random:`Conditional R2`, ~ round(.x, 2)))
+
+vars_strive_4f_output_df <- data.frame(t(vars_strive_4f_df), con_1 = "", con_2 = "", con_3 = "", con_4 = "",con_5 = "",con_6 = "",con_7 = "") %>%
+  rownames_to_column(var = "term") %>%
+  select(term, MTurkCode, con_1, MTurkCode1, con_2, MTurkCode2, con_3, MTurkCode3, con_4,MTurkCode4, con_5,MTurkCode5, con_6,MTurkCode6, con_7) %>%
+  setNames(colnames(fix_output_strive_4f_df))
+
+mlm_strive_4f_apa_df <- rbind(fix_output_strive_4f_df, vars_strive_4f_output_df)
+
+# reformat output
+correct_term_names <- c("Intercept", "Baseline Behavior","Recurring Goals", "Short-Term Goals","Clariy", "Value", "External Motive", "${\\sigma}^2$", "$\\tau_{00}$", "ICC", "${R}^2$", "${\\Omega_{0}}^2$", "observation", "group")
+
+term_order <- c("Intercept", "Baseline Behavior","Clariy", "Value", "External Motive", "Recurring Goals", "Short-Term Goals", "${\\sigma}^2$", "$\\tau_{00}$", "ICC", "${R}^2$", "${\\Omega_{0}}^2$", "observation", "group")
+
+mlm_strive_4f_apa_df$term <- correct_term_names
+
+mlm_strive_4f_apa_df <- mlm_strive_4f_apa_df %>%
+  arrange(match(term, term_order))
+
+#write.csv(mlm_strive_4f_apa_df, here("TimeSeries", "Outputs", "mlm_strive_4f_apa_df.csv"), row.names = F)
+```
+
+
+```{r}
+# extract fix effect output
+fix_output_final_comm_6f <- extract_fix_effect(comm_mlm_6f_final) %>%
+  mutate(across("term", str_replace, "Commitment", "Baseline Behavior"))
+fix_output_final_eff_6f <- extract_fix_effect(eff_mlm_6f_final)  %>%
+  mutate(across("term", str_replace, "Effort", "Baseline Behavior"))
+fix_output_final_urg_6f <- extract_fix_effect(urg_mlm_6f_final)  %>%
+  mutate(across("term", str_replace, "Urgency", "Baseline Behavior"))
+fix_output_final_plan_6f <- extract_fix_effect(plan_mlm_6f_final)  %>%
+  mutate(across("term", str_replace, "Implementation intention", "Baseline Behavior"))
+fix_output_final_ACRISS_6f <- extract_fix_effect(ACRISS_mlm_6f_final)  %>%
+  mutate(across("term", str_replace, "Procrastination", "Baseline Behavior"))
+fix_output_final_self_resources_6f <- extract_fix_effect(self_resources_mlm_6f_final)  %>%
+  mutate(across("term", str_replace, "Self resources", "Baseline Behavior"))
+
+fix_output_final_other_resources_mlm_6f <- extract_fix_effect(other_resources_mlm_6f_final)  %>%
+  mutate(across("term", str_replace, "Other resources", "Baseline Behavior"))
+
+fix_output_strive_6f_df <- fix_output_final_urg_6f %>%
+  left_join(fix_output_final_comm_6f, by = "term") %>%
+  left_join(fix_output_final_eff_6f, by = "term") %>%
+  left_join(fix_output_final_plan_6f, by = "term") %>%
+  left_join(fix_output_final_ACRISS_6f, by = "term") %>%
+  left_join(fix_output_final_self_resources_6f, by = "term") %>%
+  left_join(fix_output_final_self_resources_6f, by = "term")
+
+# Extract random effect
+vars_comm_strive_6f <- data.frame(insight::get_variance(comm_mlm_6f_final), model = "Commonality", observation = as.character(nobs(comm_mlm_6f_final)), group = as.character(comm_mlm_6f_final@Gp[2]))
+
+vars_eff_strive_6f <- data.frame(insight::get_variance(eff_mlm_6f_final), model = "Effort", observation = as.character(nobs(eff_mlm_6f_final)), group = as.character(eff_mlm_6f_final@Gp[2]))
+
+vars_urg_strive_6f <- data.frame(insight::get_variance(urg_mlm_6f_final), model = "Urgency", observation = as.character(nobs(urg_mlm_6f_final)), group = as.character(urg_mlm_6f_final@Gp[2]))
+
+vars_plan_strive_6f <- data.frame(insight::get_variance(plan_mlm_6f_final), model = "Implementation Intention", observation = as.character(nobs(plan_mlm_6f_final)), group = as.character(plan_mlm_6f_final@Gp[2]))
+
+vars_ACRISS_strive_6f <- data.frame(insight::get_variance(ACRISS_mlm_6f_final), model = "Action Crisis", observation = as.character(nobs(ACRISS_mlm_6f_final)), group = as.character(ACRISS_mlm_6f_final@Gp[2]))
+
+vars_self_resources_strive_6f <- data.frame(insight::get_variance(self_resources_mlm_6f_final), model = "Self Resources", observation = as.character(nobs(self_resources_mlm_6f_final)), group = as.character(self_resources_mlm_6f_final@Gp[2]))
+
+vars_other_resources_strive_6f <- data.frame(insight::get_variance(other_resources_mlm_6f_final), model = "Other Resources", observation = as.character(nobs(other_resources_mlm_6f_final)), group = as.character(other_resources_mlm_6f_final@Gp[2]))
+
+vars_strive_6f_df <- rbind(vars_urg_strive_6f, vars_comm_strive_6f, vars_eff_strive_6f, vars_plan_strive_6f, vars_ACRISS_strive_6f, vars_self_resources_strive_6f, vars_other_resources_strive_6f) %>%
+  mutate(ICC = var.random / (var.random + var.residual), 
+         `Marginal R2` = var.fixed / (var.fixed + var.random + var.residual),
+         `Conditional R2` = (var.fixed + var.random) / (var.fixed + var.random + var.residual)) %>%
+  select(var.random, var.residual, ICC, `Marginal R2`, `Conditional R2`, observation, group) %>%
+  mutate(across(var.random:`Conditional R2`, ~ round(.x, 2)))
+
+vars_strive_6f_output_df <- data.frame(t(vars_strive_6f_df), con_1 = "", con_2 = "", con_3 = "", con_4 = "",con_5 = "",con_6 = "",con_7 = "") %>%
+  rownames_to_column(var = "term") %>%
+  select(term, MTurkCode, con_1, MTurkCode1, con_2, MTurkCode2, con_3, MTurkCode3, con_4,MTurkCode4, con_5,MTurkCode5, con_6,MTurkCode6, con_7) %>%
+  setNames(colnames(fix_output_strive_6f_df))
+
+mlm_strive_6f_apa_df <- rbind(fix_output_strive_6f_df, vars_strive_6f_output_df)
+
+# reformat output
+correct_term_names <- c("Intercept", "Baseline Behavior","Attainability", "External Motive", "Instrumentality", "Value", "${\\sigma}^2$", "$\\tau_{00}$", "ICC", "${R}^2$", "${\\Omega_{0}}^2$", "observation", "group")
+
+term_order <- c("Intercept", "Baseline Behavior","Clariy", "Value", "External Motive", "Recurring Goals", "Short-Term Goals", "${\\sigma}^2$", "$\\tau_{00}$", "ICC", "${R}^2$", "${\\Omega_{0}}^2$", "observation", "group")
+
+mlm_strive_6f_apa_df$term <- correct_term_names
+
+#write.csv(mlm_strive_6f_apa_df, here("TimeSeries", "Outputs", "mlm_strive_6f_apa_df.csv"), row.names = F)
+```
+
+
+
+
+
+```{r}
+# Generate a dataframe for these coefficients
+mlm_sig_coeff_4f <- data.frame(factor = c("Value", "Clarity", "External", "Consensus"),
+           progress = c(NA, progress_coeff_4f_sig[1], progress_coeff_4f_sig[2], NA),
+           satisfaction = c(NA, satisfaction_coeff_4f_sig[1], NA, NA),
+           commitment = c(NA, comm_coeff_4f_sig[1], comm_coeff_4f_sig[2], NA),
+           effort = c(eff_coeff_4f_sig[3], eff_coeff_4f_sig[1], eff_coeff_4f_sig[2], NA),
+           urgency = c(urg_coeff_4f_sig[3], urg_coeff_4f_sig[1], urg_coeff_4f_sig[2], NA),
+           implementation_intention = c(NA, plan_coeff_4f_sig[1], plan_coeff_4f_sig[2], NA),
+           action_crisis = c(NA, ACRISS_coeff_4f_sig[1], NA, NA),
+           self_resources = c(self_resources_coeff_4f_sig[3], self_resources_coeff_4f_sig[1], self_resources_coeff_4f_sig[2], NA),
+           other_resources = c(NA, NA, other_resources_coeff_4f_sig[1], NA))
+
+#write.csv(mlm_sig_coeff_4f, here("TimeSeries", "Outputs","mlm_sig_coeff_4f.csv"), row.names = F)
+
+mlm_sig_coeff_4f %>%
+    kable(format = "html", escape = F, caption = "The coefficient estimates of factor scores on each variable") %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+```{r}
+# visualization
+
+
+beta_df <- mlm_sig_coeff_4f %>% gather(-factor, key = "item", value = "beta")
+colOrder <- c("Value", "Clarity", "External", "Consensus")
+rowOrder <- rev(unique(beta_df$item))
+
+beta_df <- beta_df %>%
+  mutate(factor = factor(factor, levels = colOrder),
+         item = factor(item, levels = rowOrder))
+
+ggplot(beta_df, aes(item, abs(beta), fill=beta)) + 
+  facet_wrap(~ factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "darkgreen", 
+                       midpoint=0, guide="colourbar") +
+  ylab("beta estimates") + #improve y-axis label + 
+  ggtitle("The Beta Estimates of the Factors Retained in the Final Model") +
+  labs(caption = "*the beta estimates were generated from multilevel models with random intercepts") +
+  theme_bw(base_size=10) + 
+  theme(axis.text.x = element_text(angle = 45), 
+        plot.caption = element_text(hjust = 0.5, color = "blue"))
+```
+
+## Extract significant beta coefficients from 4-factor models
+
+```{r}
+# progress
+progress_coeff_6f <- summary(final_progress_mlm_6f_final)$coefficients
+progress_coeff_6f_sig <- progress_coeff_6f[c("Attainability_6f", "External_6f", "Instrumentality_6f"), "Estimate"]
+
+# satisfaction
+satisfaction_coeff_6f <- summary(final_satisfaction_mlm_6f_final)$coefficients
+satisfaction_coeff_6f_sig <- satisfaction_coeff_6f[c("Attainability_6f"), "Estimate"]
+
+# commitment
+comm_coeff_6f <- summary(comm_mlm_6f_final)$coefficients
+comm_coeff_6f_sig <- comm_coeff_6f[c("Attainability_6f", "External_6f", "Instrumentality_6f"), "Estimate"]
+# effort
+eff_coeff_6f <- summary(eff_mlm_6f_final)$coefficients
+eff_coeff_6f_sig <- eff_coeff_6f[c("Attainability_6f", "External_6f", "Instrumentality_6f", "Value_6f"), "Estimate"]
+# urgency
+urg_coeff_6f <- summary(urg_mlm_6f_final)$coefficients
+urg_coeff_6f_sig <- urg_coeff_6f[c("Attainability_6f", "External_6f", "Instrumentality_6f", "Value_6f"), "Estimate"]
+# implementation intention
+plan_coeff_6f <- summary(plan_mlm_6f_final)$coefficients
+plan_coeff_6f_sig <- plan_coeff_6f[c("Attainability_6f", "External_6f"), "Estimate"]
+# action crisis
+ACRISS_coeff_6f <- summary(ACRISS_mlm_6f_final)$coefficients
+ACRISS_coeff_6f_sig <- ACRISS_coeff_6f[c("Attainability_6f"), "Estimate"]
+# self-resources
+self_resources_coeff_6f <- summary(self_resources_mlm_6f_final)$coefficients
+self_resources_coeff_6f_sig <- self_resources_coeff_6f[c("Attainability_6f", "External_6f"), "Estimate"]
+# other-resources
+other_resources_coeff_6f <- summary(other_resources_mlm_6f_final)$coefficients
+other_resources_coeff_6f_sig <- other_resources_coeff_6f[c("External_6f"), "Estimate"]
+```
+
+```{r}
+# Generate a dataframe for these coefficients
+mlm_sig_coeff_6f <- data.frame(factor = c("Value", "External", "Attainability", "Instrumentality", "Consensus", "Measurability"),
+           progress = c(NA, progress_coeff_6f_sig[2], progress_coeff_6f_sig[1], NA, NA, NA),
+           satisfaction = c(NA, NA, satisfaction_coeff_6f_sig[1], NA, NA, NA),
+           commitment = c(NA, comm_coeff_6f_sig[2], comm_coeff_6f_sig[1], comm_coeff_6f_sig[3], NA, NA),
+           effort = c(eff_coeff_6f_sig[4], eff_coeff_6f_sig[2], eff_coeff_6f_sig[1], eff_coeff_6f_sig[3], NA, NA),
+           urgency = c(urg_coeff_6f_sig[4], urg_coeff_6f_sig[2], urg_coeff_6f_sig[1], urg_coeff_6f_sig[3], NA, NA),
+           implementation_intention = c(NA, plan_coeff_6f_sig[2], plan_coeff_6f_sig[1], NA, NA, NA),
+           action_crisis = c(NA, NA, ACRISS_coeff_6f_sig[1], NA, NA, NA),
+           self_resources = c(NA, self_resources_coeff_6f_sig[2], self_resources_coeff_6f_sig[1], NA, NA, NA),
+           other_resources = c(NA, other_resources_coeff_6f_sig[1], NA, NA, NA, NA))
+
+#write.csv(mlm_sig_coeff_4f, here("TimeSeries", "Outputs","mlm_sig_coeff_4f.csv"), row.names = F)
+
+mlm_sig_coeff_6f %>%
+    kable(format = "html", escape = F, caption = "The coefficient estimates of factor scores on each variable") %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F,position = "center")
+```
+
+```{r}
+# visualization
+
+beta_df <- mlm_sig_coeff_6f %>% gather(-factor, key = "item", value = "beta")
+colOrder <- c("Value", "External", "Attainability", "Instrumentality", "Consensus", "Measurability")
+rowOrder <- rev(unique(beta_df$item))
+
+beta_df <- beta_df %>%
+  mutate(factor = factor(factor, levels = colOrder),
+         item = factor(item, levels = rowOrder))
+
+ggplot(beta_df, aes(item, abs(beta), fill=beta)) + 
+  facet_wrap(~ factor, nrow=1) + #place the factors in separate facets
+  geom_bar(stat="identity") + #make the bars
+  coord_flip() + #flip the axes so the test names can be horizontal  
+  #define the fill color gradient: blue=positive, red=negative
+  scale_fill_gradient2(name = "Loading", 
+                       high = "orange", mid = "white", low = "darkgreen", 
+                       midpoint=0, guide="colourbar") +
+  ylab("beta estimates") + #improve y-axis label + 
+  ggtitle("The Beta Estimates of the Factors Retained in the Final Model") +
+  labs(caption = "*the beta estimates were generated from multilevel models with random intercepts") +
+  theme_bw(base_size=10) + 
+  theme(axis.text.x = element_text(angle = 45), 
+        plot.caption = element_text(hjust = 0.5, color = "blue"))
+```
+
+write the outputs
+```{r}
+write.csv(mlm_sig_coeff_4f, here("TimeSeries", "Outputs", "mlm_sig_coeff_4f.csv"), row.names = F)
+write.csv(mlm_sig_coeff_6f, here("TimeSeries", "Outputs", "mlm_sig_coeff_6f.csv"), row.names = F)
+```
+
+# Only look at short-term goals: 
+
+```{r}
+progress_mlm_df <- progress_mlm_df %>%
+  filter(goalType == "short-term")
+```
+
+```{r}
+final_progress_mlm_6f <- lmer(progress_final ~ 1 + progress_base + final_time + satisfaction_base + Attainability_6f + External_6f + Instrumentality_6f + Consensus_6f + Value_6f + Measurability_6f + (1 | MTurkCode), REML = FALSE, data = progress_mlm_df)
+
+step(final_progress_mlm_6f)
+```
+
+```{r}
+satisfaction_mlm_df <- satisfaction_mlm_df %>%
+  filter(goalType == "short-term")
+
+final_satisfaction_mlm_6f <- lmer(satisfaction_final ~ satisfaction_base + final_time + progress_final + progress_base + Attainability_6f + External_6f + Instrumentality_6f + Consensus_6f + Value_6f + Measurability_6f + (1 | MTurkCode), REML = FALSE, data = satisfaction_mlm_df)
+
+step(final_satisfaction_mlm_6f)
+```
+
+```{r}
+summary(lm(satisfaction_final ~ satisfaction_base + progress_final + Attainability_6f + Instrumentality_6f, data = satisfaction_mlm_df))
+```
+
